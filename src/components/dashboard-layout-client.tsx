@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronsUpDown, Check, Settings, UserCheck, RefreshCw, Layers } from 'lucide-react';
+import { ChevronsUpDown, Check, Settings, UserCheck, RefreshCw, Layers, Gamepad2, PenTool } from 'lucide-react';
 import { RawJiraIssue, PersonalDataMap, UserAccount } from '@/types';
 import { getJiraTasksAction } from '@/server/actions/jira-actions';
 import { getPersonalRecordsAction } from '@/server/actions/personal-actions';
@@ -352,6 +352,28 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
                 >
                   <Layers className="w-3.5 h-3.5" />
                   Strategic Roadmap
+                </Link>
+                <Link
+                  href="/dashboard/k8s-lab"
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                    pathname === '/dashboard/k8s-lab' 
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <Gamepad2 className="w-3.5 h-3.5" />
+                  K8s Lab
+                </Link>
+                <Link
+                  href="/dashboard/k8s-draw"
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                    pathname === '/dashboard/k8s-draw' 
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <PenTool className="w-3.5 h-3.5" />
+                  K8s Draw
                 </Link>
               </div>
             </div>

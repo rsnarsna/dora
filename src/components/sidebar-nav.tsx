@@ -11,7 +11,9 @@ import {
   SlidersHorizontal,
   X,
   RotateCcw,
-  Layers
+  Layers,
+  Gamepad2,
+  PenTool
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -345,6 +347,38 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             </Tooltip>
           </TooltipProvider>
 
+          <TooltipProvider>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link 
+                  href="/dashboard/k8s-lab" 
+                  className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <Gamepad2 className="w-5 h-5" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                K8s Practice Lab
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link 
+                  href="/dashboard/k8s-draw" 
+                  className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <PenTool className="w-5 h-5" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                K8s Architecture Draw
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
           {/* Config / Filters Popover */}
           <TooltipProvider>
             <Tooltip delayDuration={0}>
@@ -477,20 +511,34 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       {/* Header */}
       <div className="p-3.5 border-b border-border space-y-2.5">
         {/* Navigation Switchers: Overview & Roadmap */}
-        <div className="grid grid-cols-2 gap-1 p-0.5 bg-muted/50 rounded-lg border border-border">
+        <div className="grid grid-cols-4 gap-1 p-0.5 bg-muted/50 rounded-lg border border-border">
           <Link
             href="/dashboard"
-            className="flex items-center justify-center gap-1.5 py-1 px-2 rounded-md text-xs font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
           >
-            <LayoutList className="w-3.5 h-3.5" />
+            <LayoutList className="w-3 h-3 shrink-0" />
             <span>Overview</span>
           </Link>
           <Link
             href="/dashboard/roadmap"
-            className="flex items-center justify-center gap-1.5 py-1 px-2 rounded-md text-xs font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
           >
-            <Layers className="w-3.5 h-3.5" />
+            <Layers className="w-3 h-3 shrink-0" />
             <span>Roadmap</span>
+          </Link>
+          <Link
+            href="/dashboard/k8s-lab"
+            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+          >
+            <Gamepad2 className="w-3 h-3 shrink-0" />
+            <span>K8s Lab</span>
+          </Link>
+          <Link
+            href="/dashboard/k8s-draw"
+            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+          >
+            <PenTool className="w-3 h-3 shrink-0" />
+            <span>Draw</span>
           </Link>
         </div>
 
