@@ -57,11 +57,11 @@ const GROUP_COLORS = [
 ];
 
 export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData }) => {
-  const { appConfig, activeAccount, accounts, switchAccount } = useDashboard();
+  const { appConfig, setAppConfig, activeAccount, accounts, switchAccount } = useDashboard();
+  const currentAccIdRef = React.useRef<string | null>(null);
 
   // Helper to get initial groups for the active account
-  const getAccountInitialGroups = (): RoadmapGroup[] => {
-    const accId = activeAccount?.id || 'account-1';
+  const getAccountInitialGroups = (accId: string): RoadmapGroup[] => {
     const byAccount = appConfig?.roadmapGroupsByAccount?.[accId];
     if (byAccount && byAccount.length > 0) return byAccount;
     if (accId === 'account-1' && appConfig?.roadmapGroups && appConfig.roadmapGroups.length > 0) {
@@ -73,24 +73,21 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
     ];
   };
 
+  const initialAccId = activeAccount?.id || 'account-1';
   // Local state for roadmap groups — dynamically scoped to activeAccount
-  const [groups, setGroups] = useState<RoadmapGroup[]>(getAccountInitialGroups);
+  const [groups, setGroups] = useState<RoadmapGroup[]>(() => getAccountInitialGroups(initialAccId));
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState<string>('');
 
-  // Automatically update groups when switching accounts or when config updates
+  // Automatically update groups ONLY when switching accounts
   useEffect(() => {
     const accId = activeAccount?.id || 'account-1';
-    const byAccount = appConfig?.roadmapGroupsByAccount?.[accId];
-    if (byAccount && byAccount.length > 0) {
-      setGroups(byAccount);
-    } else if (accId === 'account-1' && appConfig?.roadmapGroups && appConfig.roadmapGroups.length > 0) {
-      setGroups(appConfig.roadmapGroups);
-    } else {
-      setGroups([
-        { id: `group-${accId}-1`, name: 'Sprint Milestone: Core Planning', color: '#0052cc', taskKeys: [] },
-        { id: `group-${accId}-2`, name: 'Sprint Milestone: Execution & Review', color: '#00875a', taskKeys: [] },
-      ]);
+    if (currentAccIdRef.current === accId) {
+      return; // Already viewing this account, preserve user edits and drag actions
     }
-  }, [activeAccount?.id, appConfig?.roadmapGroupsByAccount]);
+    currentAccIdRef.current = accId;
+    setGroups(getAccountInitialGroups(accId));
+  }, [activeAccount?.id]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [scopeFilter, setScopeFilter] = useState<'all' | 'sprint' | 'backlog'>('all');
@@ -157,26 +154,41 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
   // Save to Supabase specifically under the active account
   const persistGroups = async (updatedGroups: RoadmapGroup[]) => {
     setGroups(updatedGroups);
-    setSaveStatus('Saving...');
+    setSaveStatus('Saving to Database...');
     try {
-      if (appConfig) {
-        const accId = activeAccount?.id || 'account-1';
-        const updatedByAccount = {
-          ...(appConfig.roadmapGroupsByAccount || {}),
-          [accId]: updatedGroups,
-        };
-        const updatedConfig: AppConfig = {
-          ...appConfig,
-          roadmapGroups: accId === 'account-1' ? updatedGroups : appConfig.roadmapGroups,
-          roadmapGroupsByAccount: updatedByAccount,
-        };
-        await saveAppConfigAction(updatedConfig);
+      const accId = activeAccount?.id || 'account-1';
+      const updatedByAccount = {
+        ...(appConfig?.roadmapGroupsByAccount || {}),
+        [accId]: updatedGroups,
+      };
+      const updatedConfig: AppConfig = {
+        ...(appConfig || {}),
+        app: appConfig?.app || { title: 'Dora', description: 'Personal Jira Management Dashboard' },
+        sidebar: appConfig?.sidebar || { width: '22rem', defaultOpen: true },
+        accounts: appConfig?.accounts || [],
+        jiraDomains: appConfig?.jiraDomains || [],
+        statusColors: appConfig?.statusColors || {},
+        statusThemes: appConfig?.statusThemes || {},
+        roadmapGroups: accId === 'account-1' ? updatedGroups : (appConfig?.roadmapGroups || updatedGroups),
+        roadmapGroupsByAccount: updatedByAccount,
+      };
+
+      // Immediately sync with in-memory React Context
+      if (setAppConfig) {
+        setAppConfig(updatedConfig);
       }
-      setSaveStatus('Saved to Supabase');
+
+      // Persist directly to Supabase app_config row
+      const res = await saveAppConfigAction(updatedConfig);
+      if (res && !res.ok) {
+        throw new Error(res.error || 'Backend failed to save config');
+      }
+
+      setSaveStatus('✅ Saved to Database');
       setTimeout(() => setSaveStatus('All changes saved'), 2500);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save roadmap groups:', error);
-      setSaveStatus('Error saving');
+      setSaveStatus('⚠️ ' + (error?.message || 'Error saving to DB'));
     }
   };
 
@@ -218,6 +230,49 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
 
     persistGroups(updated);
     setDraggedKey(null);
+  };
+
+  const handleDropOnTaskCard = (e: React.DragEvent, targetGroupId: string, targetTaskKey: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverGroupId(null);
+    const key = e.dataTransfer.getData('text/plain') || draggedKey;
+    if (!key || key === targetTaskKey) return;
+
+    const updated = groups.map((g) => {
+      const filtered = g.taskKeys.filter((k) => k !== key);
+      if (g.id === targetGroupId) {
+        const targetIndex = filtered.indexOf(targetTaskKey);
+        if (targetIndex === -1) {
+          return { ...g, taskKeys: [...filtered, key] };
+        }
+        const withInserted = [...filtered];
+        withInserted.splice(targetIndex, 0, key);
+        return { ...g, taskKeys: withInserted };
+      }
+      return { ...g, taskKeys: filtered };
+    });
+
+    persistGroups(updated);
+    setDraggedKey(null);
+  };
+
+  const handleStartRename = (group: RoadmapGroup) => {
+    setEditingGroupId(group.id);
+    setEditingGroupName(group.name);
+  };
+
+  const handleSaveRename = (groupId: string) => {
+    if (!editingGroupName.trim()) {
+      setEditingGroupId(null);
+      return;
+    }
+    const updated = groups.map((g) => {
+      if (g.id !== groupId) return g;
+      return { ...g, name: editingGroupName.trim() };
+    });
+    persistGroups(updated);
+    setEditingGroupId(null);
   };
 
   const handleDropInQueue = (e: React.DragEvent) => {
@@ -496,14 +551,34 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                     style={{ borderTop: `4px solid ${group.color || '#0052cc'}` }}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-xs text-foreground truncate">
-                          {group.name}
-                        </h3>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono shrink-0">
-                          {group.taskKeys.length}
-                        </Badge>
-                      </div>
+                      {editingGroupId === group.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            value={editingGroupName}
+                            onChange={(e) => setEditingGroupName(e.target.value)}
+                            onBlur={() => handleSaveRename(group.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveRename(group.id);
+                              if (e.key === 'Escape') setEditingGroupId(null);
+                            }}
+                            autoFocus
+                            className="h-6 text-xs px-1.5 py-0 bg-background border-primary"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <h3 
+                            onClick={() => handleStartRename(group)}
+                            className="font-bold text-xs text-foreground truncate cursor-pointer hover:underline hover:text-primary transition-colors"
+                            title="Click to rename group"
+                          >
+                            {group.name}
+                          </h3>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono shrink-0">
+                            {group.taskKeys.length}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1">
@@ -550,6 +625,8 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                             key={key}
                             draggable
                             onDragStart={(e) => handleDragStart(e, key)}
+                            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                            onDrop={(e) => handleDropOnTaskCard(e, group.id, key)}
                             className="bg-card border border-border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-all space-y-2.5 cursor-grab active:cursor-grabbing relative group"
                           >
                             {/* Sequence / Step Indicator Tag */}

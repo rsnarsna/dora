@@ -180,6 +180,11 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
     router.push(`/dashboard/${key}`);
   };
 
+  const updateAppConfig = async (newConfig: AppConfig) => {
+    setAppConfig(newConfig);
+    return await saveAppConfigAction(newConfig);
+  };
+
   if (isLoading) {
     return <div className="flex h-screen items-center justify-center">Loading dashboard...</div>;
   }
@@ -197,6 +202,8 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
       accounts,
       switchAccount: handleSwitchAccount,
       appConfig,
+      setAppConfig,
+      updateAppConfig,
       loadData 
     }}>
       <SidebarProvider 
