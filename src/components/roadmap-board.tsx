@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { RawJiraIssue, PersonalDataMap } from '@/types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { RawJiraIssue, PersonalDataMap, UserAccount } from '@/types';
 import { RoadmapGroup, AppConfig } from '@/lib/app-config';
 import { useDashboard } from '@/components/dashboard-layout-client';
 import { saveAppConfigAction } from '@/server/actions/config-actions';
 import { calculateBufferDays } from '@/lib/jira-utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Plus, 
   Trash2, 
@@ -56,21 +57,44 @@ const GROUP_COLORS = [
 ];
 
 export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData }) => {
-  const { appConfig } = useDashboard();
+  const { appConfig, activeAccount, accounts, switchAccount } = useDashboard();
 
-  // Local state for roadmap groups
-  const [groups, setGroups] = useState<RoadmapGroup[]>(
-    appConfig?.roadmapGroups && appConfig.roadmapGroups.length > 0
-      ? appConfig.roadmapGroups
-      : [
-          { id: 'group-1', name: 'Sprint Milestone 1: Server & Infrastructure Setup', color: '#0052cc', taskKeys: ['SCRUM-179', 'SCRUM-180'] },
-          { id: 'group-2', name: 'Sprint Milestone 2: Security & Splunk Ingestion', color: '#00875a', taskKeys: ['SCRUM-181', 'SCRUM-182', 'SCRUM-168'] },
-          { id: 'group-3', name: 'Planned Next: Content Prep & Showcase Deliverables', color: '#6554c0', taskKeys: ['SCRUM-97', 'SCRUM-98', 'SCRUM-135'] },
-        ]
-  );
+  // Helper to get initial groups for the active account
+  const getAccountInitialGroups = (): RoadmapGroup[] => {
+    const accId = activeAccount?.id || 'account-1';
+    const byAccount = appConfig?.roadmapGroupsByAccount?.[accId];
+    if (byAccount && byAccount.length > 0) return byAccount;
+    if (accId === 'account-1' && appConfig?.roadmapGroups && appConfig.roadmapGroups.length > 0) {
+      return appConfig.roadmapGroups;
+    }
+    return [
+      { id: `group-${accId}-1`, name: 'Sprint Milestone: Core Planning', color: '#0052cc', taskKeys: [] },
+      { id: `group-${accId}-2`, name: 'Sprint Milestone: Execution & Review', color: '#00875a', taskKeys: [] },
+    ];
+  };
+
+  // Local state for roadmap groups — dynamically scoped to activeAccount
+  const [groups, setGroups] = useState<RoadmapGroup[]>(getAccountInitialGroups);
+
+  // Automatically update groups when switching accounts or when config updates
+  useEffect(() => {
+    const accId = activeAccount?.id || 'account-1';
+    const byAccount = appConfig?.roadmapGroupsByAccount?.[accId];
+    if (byAccount && byAccount.length > 0) {
+      setGroups(byAccount);
+    } else if (accId === 'account-1' && appConfig?.roadmapGroups && appConfig.roadmapGroups.length > 0) {
+      setGroups(appConfig.roadmapGroups);
+    } else {
+      setGroups([
+        { id: `group-${accId}-1`, name: 'Sprint Milestone: Core Planning', color: '#0052cc', taskKeys: [] },
+        { id: `group-${accId}-2`, name: 'Sprint Milestone: Execution & Review', color: '#00875a', taskKeys: [] },
+      ]);
+    }
+  }, [activeAccount?.id, appConfig?.roadmapGroupsByAccount]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [scopeFilter, setScopeFilter] = useState<'all' | 'sprint' | 'backlog'>('all');
+  const [assigneeScope, setAssigneeScope] = useState<'all' | 'me'>('all');
   const [sortBy, setSortBy] = useState<'timeline' | 'priority'>('timeline');
   const [newGroupName, setNewGroupName] = useState('');
   const [isAddingGroup, setIsAddingGroup] = useState(false);
@@ -92,13 +116,18 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
     return m;
   }, [tasks]);
 
-  // Auto-aligned Queue (Available Pool)
+  // Auto-aligned Queue (Available Pool) - filtered strictly to active account and optional 'me' scope
   const queueTasks = useMemo(() => {
     return tasks
       .filter((t) => {
         if (groupedKeysSet.has(t.key)) return false;
         if (scopeFilter === 'sprint' && !t.in_active_sprint) return false;
         if (scopeFilter === 'backlog' && t.in_active_sprint) return false;
+
+        // Filter to 'My Tasks' only if toggled and account has a jiraUser configured
+        if (assigneeScope === 'me' && activeAccount?.jiraUser && activeAccount.jiraUser !== 'none') {
+          if (t.assignee !== activeAccount.jiraUser) return false;
+        }
 
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
@@ -123,15 +152,24 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
         const dateB = b.official_deadline && b.official_deadline !== 'Not Set' ? b.official_deadline : b.start_date || '9999-99-99';
         return dateA.localeCompare(dateB);
       });
-  }, [tasks, groupedKeysSet, scopeFilter, searchQuery, sortBy, personalData]);
+  }, [tasks, groupedKeysSet, scopeFilter, assigneeScope, activeAccount, searchQuery, sortBy, personalData]);
 
-  // Save to Supabase
+  // Save to Supabase specifically under the active account
   const persistGroups = async (updatedGroups: RoadmapGroup[]) => {
     setGroups(updatedGroups);
     setSaveStatus('Saving...');
     try {
       if (appConfig) {
-        const updatedConfig: AppConfig = { ...appConfig, roadmapGroups: updatedGroups };
+        const accId = activeAccount?.id || 'account-1';
+        const updatedByAccount = {
+          ...(appConfig.roadmapGroupsByAccount || {}),
+          [accId]: updatedGroups,
+        };
+        const updatedConfig: AppConfig = {
+          ...appConfig,
+          roadmapGroups: accId === 'account-1' ? updatedGroups : appConfig.roadmapGroups,
+          roadmapGroupsByAccount: updatedByAccount,
+        };
         await saveAppConfigAction(updatedConfig);
       }
       setSaveStatus('Saved to Supabase');
@@ -241,8 +279,34 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground hidden md:inline">{saveStatus}</span>
+        <div className="flex items-center flex-wrap gap-3">
+          {/* Active Account Switcher */}
+          {accounts && accounts.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-muted/60 p-1 px-2 rounded-lg border border-border shadow-2xs">
+              <span className="text-[11px] text-muted-foreground font-semibold hidden sm:inline">Account:</span>
+              <Select value={activeAccount?.id || accounts[0]?.id} onValueChange={(val) => switchAccount && switchAccount(val)}>
+                <SelectTrigger className="h-7 text-xs font-bold bg-card border-border gap-2 min-w-[180px] max-w-[240px]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent className="z-50">
+                  {accounts.map((acc: UserAccount) => (
+                    <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold truncate">{acc.name}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">({acc.jiraDomain})</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary hidden md:inline-flex">
+                {tasks.length} tasks
+              </Badge>
+            </div>
+          )}
+
+          <span className="text-xs text-muted-foreground hidden lg:inline">{saveStatus}</span>
           {isAddingGroup ? (
             <div className="flex items-center gap-2">
               <Input
@@ -320,11 +384,46 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                 <TabsTrigger value="backlog" className="text-[11px] py-0">Backlog</TabsTrigger>
               </TabsList>
             </Tabs>
+
+            {/* Assignee Scope Filter (All Account Tasks vs My Tasks) */}
+            {activeAccount?.jiraUser && activeAccount.jiraUser !== 'none' && (
+              <div className="flex items-center justify-between text-[10px] pt-1 border-t border-border/50">
+                <span className="text-muted-foreground">Scope:</span>
+                <div className="flex items-center gap-1 bg-card rounded p-0.5 border border-border">
+                  <button
+                    onClick={() => setAssigneeScope('all')}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                      assigneeScope === 'all'
+                        ? 'bg-primary text-primary-foreground font-bold shadow-2xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    All ({tasks.length})
+                  </button>
+                  <button
+                    onClick={() => setAssigneeScope('me')}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                      assigneeScope === 'me'
+                        ? 'bg-primary text-primary-foreground font-bold shadow-2xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Assigned to Me
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Draggable Queue Cards List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-            {queueTasks.length === 0 ? (
+            {tasks.length === 0 ? (
+              <div className="text-center py-12 text-xs text-muted-foreground italic px-4 space-y-2">
+                <div className="font-semibold text-foreground/80">0 tasks found for this account</div>
+                <div className="text-[11px]">Domain: <span className="font-mono">{activeAccount?.jiraDomain}</span></div>
+                <div className="text-[10px] text-muted-foreground">Click &quot;Sync Jira&quot; in the header to pull tasks for this domain.</div>
+              </div>
+            ) : queueTasks.length === 0 ? (
               <div className="text-center py-10 text-xs text-muted-foreground italic px-4">
                 All matching tasks have been assigned to custom groups!
               </div>

@@ -32,6 +32,7 @@ export async function getAppConfigAction(): Promise<AppConfig> {
       accounts: stored.accounts && stored.accounts.length > 0 ? stored.accounts : DEFAULT_CONFIG.accounts,
       jiraDomains: stored.jiraDomains && stored.jiraDomains.length > 0 ? stored.jiraDomains : DEFAULT_CONFIG.jiraDomains,
       roadmapGroups: stored.roadmapGroups && Array.isArray(stored.roadmapGroups) ? stored.roadmapGroups : DEFAULT_CONFIG.roadmapGroups,
+      roadmapGroupsByAccount: stored.roadmapGroupsByAccount || DEFAULT_CONFIG.roadmapGroupsByAccount || {},
       statusColors: { ...DEFAULT_CONFIG.statusColors, ...(stored.statusColors || {}) },
       statusThemes: { ...DEFAULT_CONFIG.statusThemes, ...(stored.statusThemes || {}) },
     };

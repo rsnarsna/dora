@@ -30,6 +30,7 @@ export interface AppConfig {
   accounts: UserAccount[];
   jiraDomains: JiraDomainConfig[];
   roadmapGroups: RoadmapGroup[];
+  roadmapGroupsByAccount?: Record<string, RoadmapGroup[]>;
   statusColors: Record<string, string>;
   statusThemes: Record<string, { bg: string; fg: string; border: string }>;
 }
@@ -100,6 +101,42 @@ export const DEFAULT_CONFIG: AppConfig = {
       taskKeys: ['SCRUM-97', 'SCRUM-98', 'SCRUM-135'],
     },
   ],
+  roadmapGroupsByAccount: {
+    'account-1': [
+      {
+        id: 'group-1',
+        name: 'Week 1: Core Setup & Prereqs',
+        color: '#0052cc',
+        taskKeys: ['SCRUM-179', 'SCRUM-180'],
+      },
+      {
+        id: 'group-2',
+        name: 'Week 2: Security & Splunk Ingestion',
+        color: '#00875a',
+        taskKeys: ['SCRUM-181', 'SCRUM-182', 'SCRUM-168'],
+      },
+      {
+        id: 'group-3',
+        name: 'Upcoming Deliverables & Review',
+        color: '#6554c0',
+        taskKeys: ['SCRUM-97', 'SCRUM-98', 'SCRUM-135'],
+      },
+    ],
+    'account-2': [
+      {
+        id: 'group-np-1',
+        name: 'Milestone 1: Workspace & Setup',
+        color: '#0052cc',
+        taskKeys: [],
+      },
+      {
+        id: 'group-np-2',
+        name: 'Milestone 2: Execution & Review',
+        color: '#00875a',
+        taskKeys: [],
+      },
+    ],
+  },
   statusColors: {
     'In Progress': '#0052cc',
     'Done': '#00875a',
