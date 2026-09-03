@@ -110,7 +110,12 @@ async function fetchFromDomain(domain: JiraDomainConfig): Promise<{ tasks: any[]
  */
 export async function syncJiraDataAction(): Promise<JiraSyncResult> {
   if (!db) {
-    return { ok: false, totalFetched: 0, domains: [], error: 'Database not available' };
+    return { 
+      ok: false, 
+      totalFetched: 0, 
+      domains: [], 
+      error: 'Database connection failed: DATABASE_URL environment variable is missing on Vercel. Please verify Vercel Project Settings → Environment Variables (Production enabled) and Redeploy.' 
+    };
   }
 
   try {
