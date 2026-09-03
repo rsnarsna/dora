@@ -82,10 +82,9 @@ export class ClusterRenderer {
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.08;
         this.controls.enableRotate = true;
-        this.controls.enableZoom = true;
+        this.controls.enableZoom = false; // Disabled: we handle zoom ourselves for cursor-based focus
         this.controls.enablePan = true;
         this.controls.rotateSpeed = 0.8;
-        this.controls.zoomSpeed = 1.2;
         this.controls.panSpeed = 0.8;
         this.controls.minDistance = 5;
         this.controls.maxDistance = 80;
@@ -102,6 +101,76 @@ export class ClusterRenderer {
             TWO: THREE.TOUCH.DOLLY_PAN,
         };
         this.controls.update();
+
+        // Cursor-based zoom: scroll zooms directly toward/away from the 3D point under the cursor
+        this._zoomRaycaster = new THREE.Raycaster();
+        this._zoomGroundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+        this._onWheel = (e) => {
+            e.preventDefault();
+
+            // Compute normalized device coordinates (-1 to +1)
+            const rect = this.canvas.getBoundingClientRect();
+            const ndc = new THREE.Vector2(
+                ((e.clientX - rect.left) / rect.width) * 2 - 1,
+                -((e.clientY - rect.top) / rect.height) * 2 + 1
+            );
+
+            this._zoomRaycaster.setFromCamera(ndc, this.camera);
+
+            // 1. Check if cursor is pointing directly at any 3D resource/mesh
+            let focusPoint = null;
+            if (this.pickableObjects && this.pickableObjects.length > 0) {
+                const hits = this._zoomRaycaster.intersectObjects(this.pickableObjects, true);
+                if (hits.length > 0) {
+                    focusPoint = hits[0].point;
+                }
+            }
+
+            // 2. If not hitting a mesh, intersect with the ground plane (y=0)
+            if (!focusPoint) {
+                const groundHit = new THREE.Vector3();
+                if (this._zoomRaycaster.ray.intersectPlane(this._zoomGroundPlane, groundHit)) {
+                    focusPoint = groundHit;
+                }
+            }
+
+            // 3. Fallback to orbit target if cursor points into empty sky/void
+            if (!focusPoint) {
+                focusPoint = this.controls.target.clone();
+            }
+
+            // Determine zoom direction: deltaY < 0 is zoom in, deltaY > 0 is zoom out
+            const delta = Math.sign(e.deltaY);
+            if (delta === 0) return;
+
+            // Scale factor: smooth zoom step
+            const scaleFactor = delta > 0 ? 1.08 : 0.92;
+
+            const currentDist = this.camera.position.distanceTo(this.controls.target);
+            const newDist = currentDist * scaleFactor;
+
+            // Enforce OrbitControls distance limits (minDistance / maxDistance)
+            if (scaleFactor < 1 && newDist < this.controls.minDistance) return;
+            if (scaleFactor > 1 && newDist > this.controls.maxDistance) return;
+
+            // Shift camera position and orbit target relative to the cursor focus point
+            // This ensures the 3D point under the mouse cursor remains invariant on screen
+            this.camera.position.set(
+                focusPoint.x + (this.camera.position.x - focusPoint.x) * scaleFactor,
+                focusPoint.y + (this.camera.position.y - focusPoint.y) * scaleFactor,
+                focusPoint.z + (this.camera.position.z - focusPoint.z) * scaleFactor
+            );
+
+            this.controls.target.set(
+                focusPoint.x + (this.controls.target.x - focusPoint.x) * scaleFactor,
+                focusPoint.y + (this.controls.target.y - focusPoint.y) * scaleFactor,
+                focusPoint.z + (this.controls.target.z - focusPoint.z) * scaleFactor
+            );
+
+            this.controls.update();
+        };
+        this.canvas.addEventListener('wheel', this._onWheel, { passive: false });
     }
 
     _initLights() {
@@ -760,6 +829,7 @@ export class ClusterRenderer {
         this.canvas.removeEventListener('mousedown', this._onMouseDown);
         this.canvas.removeEventListener('mouseup', this._onMouseUp);
         this.canvas.removeEventListener('contextmenu', this._onContextMenu);
+        this.canvas.removeEventListener('wheel', this._onWheel);
         window.removeEventListener('resize', this._onResize);
 
         for (const id of [...this.resourceMeshes.keys()]) {
