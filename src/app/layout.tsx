@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Personal Management Dashboard (Next.js)',
-  description: 'Jira hierarchy tracker with personal discipline overlays & productivity widgets',
+  title: 'Dora — Personal Management & Strategic Roadmap',
+  description: 'Personal Jira Management Dashboard, Strategic Roadmap & Executive Command Center',
 };
 
 export default function RootLayout({

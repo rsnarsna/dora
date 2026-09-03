@@ -39,8 +39,8 @@ export interface AppConfig {
  */
 export const DEFAULT_CONFIG: AppConfig = {
   app: {
-    title: 'Personal Management Dashboard',
-    description: 'Jira hierarchy tracker with personal discipline overlays & productivity widgets',
+    title: 'Dora',
+    description: 'Personal Jira Management Dashboard & Strategic Execution Roadmap',
   },
   sidebar: {
     width: '22rem',
