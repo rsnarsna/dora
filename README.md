@@ -1,7 +1,7 @@
 # Dora 🧭
 
-> **Personal Jira Management Dashboard & Strategic Execution Roadmap**  
-> *Transform high-noise Jira boards into structured personal workstreams, clear weekly priorities, and disciplined execution.*
+> **Personal Command Center, 2D → 3D Knowledge Universe & Kubernetes Architecture Studio**  
+> *Transform complex projects, cloud systems, and learning goals into clear, visual 3D spaces that help you think better.*
 
 ---
 
@@ -9,113 +9,149 @@
 
 > ### **"The application should assist our thinking, not replace our thinking."**
 > 
-> **Dora** is engineered as a **cognitive exoskeleton**, not an autonomous micromanager. Traditional productivity suites often try to replace human thinking by enforcing rigid, black-box algorithms, opaque automated schedules, and bureaucratic workflows.
+> Most software tries to decide things for you. It builds black-box schedules, enforces rigid steps, or floods you with automated alerts that take away your judgment.
 > 
-> Dora takes the opposite approach:
-> - **Transparent Situational Clarity**: Surfaces deadlines, buffer margins, subtask dependencies, and multi-workspace loads cleanly so **you** can evaluate trade-offs and decide where to focus.
-> - **High-Agency Sandboxing**: The Strategic Roadmap and Custom Groupings are strictly isolated from Jira's team boards, giving you a private strategic scratchpad to structure, sequence (`Step 1: Active Focus`, `Step 2: Planned Next`), and execute work according to your own mental model.
-> - **Self-Directed Discipline**: Compare external corporate deadlines against your internal self-target commitments, write rapid timestamped thoughts, and practice technical systems without corporate noise.
+> **Dora is built as an intellectual workbench and cognitive exoskeleton:**
+> - **You stay in control**: The software shows you clear context, dependencies, and trade-offs. You make the strategic decisions.
+> - **Visual thinking first**: Whether you are breaking down Jira tickets, learning distributed systems, or designing software, you organize thoughts visually in 2D and 3D.
+> - **Private and sandboxed**: Your personal notes, goals, and roadmaps live in your private database and never pollute official corporate boards.
 
 ---
 
+## 🌟 Simple Feature Tour (What Dora Does)
 
-## 🌟 Overview
+Here is a simple, plain-English breakdown of every major feature in Dora:
 
-**Dora** is a high-performance personal command center built on top of Jira Cloud and Supabase. While Jira boards can quickly become cluttered with hundreds of tickets and complex team workflows, **Dora** introduces a clean personal execution layer:
+### 1. 🧠 2D → 3D Knowledge Universe
+> *Turn ideas, topics, and skills into interactive 3D objects instead of static flat notes.*
 
-- **Strategic Roadmapping**: Create custom groups, weekly milestones, and sequential workstreams via drag-and-drop without altering live team Jira data.
-- **Personal Discipline**: Set your own target deadlines, track real-time buffer days, log timestamped notes, and maintain focus with Pomodoro timers.
-- **Multi-Workspace Ingestion**: Seamlessly switch between multiple Jira Cloud domains with live cursor-based REST API synchronization.
-- **3-Level Visual Hierarchy**: Traverse from Epics down to Stories and Subtasks with integrated progress metrics.
-
----
-
-## 🚀 Key Features
-
-### 1. 🗺️ Strategic Roadmap & Custom Grouping
-- **Drag-and-Drop Sandbox**: Organize tasks into custom workstream buckets (e.g. *Week 1: Server Setup*, *Splunk Ingestion*, *Upcoming Deliverables*).
-- **Auto-Aligned Source Queue**: Feed of all tasks auto-sorted by timeline (due dates) and priority.
-- **Step Progression Engine**: Tasks automatically compute execution stages:
-  - `Step X: Done` (Predecessor / Completed)
-  - `Step X: Active Focus` (Current focus item)
-  - `Step X: Planned Next` (Upcoming step)
-- **100% Isolated**: Changes remain strictly in your private Supabase configuration, never polluting team Jira boards.
-
-### 2. ⚡ Live Jira Cloud Synchronization
-- Modern Jira Cloud REST API v3 cursor pagination (`/rest/api/3/search/jql`).
-- Domain-isolated ingestion supporting multiple Atlassian Cloud accounts.
-- Preserves full parent-child relationships across Epics, Stories, and Subtasks.
-
-### 3. 👥 Multi-Account & Workspace Switcher
-- Instantly switch between multiple company/personal Jira domains (e.g. *Softmania PS* vs *Personal Workspace*).
-- Header profile menu scopes the hierarchy, assignees, reporters, and analytics dynamically.
-
-### 4. 🎯 Personal Discipline & Tracking Overlays
-- **Task Nicknames / Aliases**: Assign friendly short names to complex Jira tickets.
-- **Self-Target Deadlines & Buffer Days**: Compare official Jira deadlines against your personal commitment dates.
-- **Timestamped Notes & Daily Logs**: Rapid note taking with `Ctrl + Enter` keyboard shortcuts.
-- **Jira-Style Subtasks Table**: Subtask progress bar with `% Done`, work links, priority badges, and assignees.
-
-### 5. 📊 Executive Dashboard & Productivity Matrix
-- **Status Distribution Donut**: Color-coded SVG chart with live status filtering and priority breakdown.
-- **Focus Timer**: Configurable Pomodoro timer with SVG progress ring and session logger.
-- **Quick To-Do**: Lightweight local checklist for ad-hoc daily tasks.
-- **Recent Activity Feed**: Centralized stream of the latest 8 timestamped notes across all tasks.
-- **Deep Analysis Graphs**: Interactive Network Graphs, Process Funnels, and Hierarchy Sunbursts powered by `@nivo`.
+- **The Idea**: Traditional notes get buried in folders. In Dora, **each topic is a reusable 3D object** (like a building block).
+- **Create Once, Reuse Everywhere**:
+  - For example, you can create a concept called **`[Indexer]`**.
+  - That exact same `[Indexer]` can live simultaneously in your **Splunk Cluster**, your **Monitoring Setup**, and your **Learning Goals**.
+  - Change it once, and it updates everywhere with zero duplicate files.
+- **2D Canvas Mode**: Work quickly on a clean flat canvas. Drag nodes, connect them with relationship wires (`depends on`, `monitors`, `feeds`), and write quick notes.
+- **3D Universe Mode**: Flip a switch to turn your 2D thoughts into a full 3D spatial world with glowing rings, 3D meshes, and flowing particle streams.
 
 ---
 
-## 🛠️ Tech Stack
+### 2. 🎨 K8s Architecture Draw (3D Whiteboard)
+> *Sketch and design distributed cloud architectures in an interactive 3D space.*
 
-- **Framework**: [Next.js 16 (App Router)](https://nextjs.org/) with Turbopack
-- **UI Library**: [React 19](https://react.dev/), [Tailwind CSS 4](https://tailwindcss.com/), [Shadcn UI](https://ui.shadcn.com/)
-- **Icons & Styling**: [Lucide Icons](https://lucide.dev/), `class-variance-authority`, `clsx`
-- **Charts & Graphs**: Native SVG, [@nivo](https://nivo.rocks/) (Funnel, Network, Sunburst)
-- **Database & ORM**: [Supabase PostgreSQL](https://supabase.com/), [Drizzle ORM](https://orm.drizzle.team/)
-- **Language**: [TypeScript 5](https://www.typescriptlang.org/)
+- **Drag and Drop**: Pick real cloud components from the palette (Pods, Deployments, Services, Ingresses, Databases, Storage) and place them onto a 3D grid.
+- **Draw Connections**: Click one resource and click another to establish networking and traffic flows.
+- **Cursor-Focused Zoom**: Zoom in and out exactly where your mouse is pointing—never losing your spot.
+- **Export**: Save your architecture as a clean PNG image, share it with a link, or export it to standard Kubernetes YAML.
 
 ---
 
-## 🏁 Quick Start
+### 3. 🎮 K8s Practice Lab (3D Cluster Simulator)
+> *Learn and experiment with Kubernetes systems hands-on in a live 3D sandbox.*
 
-### 1. Clone & Install Dependencies
+- **Interactive 3D Visualizer**: See how computing nodes, pods, and deployments behave in real time.
+- **Experiment Safely**: Scale workloads, simulate node failures, and test self-healing architectures without breaking any real servers.
+- **Deep Understanding**: Watch how traffic flows across services and networks through animated 3D particle beams.
+
+---
+
+### 4. 🗺️ Strategic Roadmap & Execution Sequencing
+> *Organize your tasks step-by-step without altering team Jira boards.*
+
+- **Independent Swimlanes**: Group Jira tasks into your own logical buckets (e.g. *Week 1: Foundations*, *Week 2: Telemetry*, *Upcoming*).
+- **Step Engine**: Automatically categorizes tasks into:
+  - `Step 1: Done` (Completed prerequisite)
+  - `Step 2: Active Focus` (What you should be working on right now)
+  - `Step 3: Planned Next` (What to pick up next)
+- **Account Isolation**: Switch between your company workspace and your personal workspace with one click.
+- **Drag & Reorder**: Reorder steps or drag cards between workstreams; changes save permanently to your private database.
+
+---
+
+### 5. 🎯 Personal Discipline & Task Command Center
+> *Your daily execution workbench.*
+
+- **Self-Target vs. Jira Due Date**: Set your own personal target date to build in buffer time before the official deadline.
+- **Buffer Margin Warning**: Instantly see how many buffer days you have left before a sprint deadline.
+- **Timestamped Thought Log**: Press `Ctrl + Enter` to log daily thoughts, technical solutions, or meeting takeaways on any ticket.
+- **Focus Timer**: Built-in Pomodoro timer to help you maintain deep focus without opening extra apps.
+- **Task Nicknames**: Give short, memorable names (like *"Auth Gateway"*) to long Jira ticket numbers (like *SCRUM-174*).
+
+---
+
+## ⚡ How Kubernetes Powers All Features
+
+Dora borrows the modular, self-healing design of Kubernetes and brings it to personal thinking:
+
+| Kubernetes Concept | How It Powers Your Thinking in Dora |
+|---|---|
+| **Pod (Hexagon)** | Represents a focused **Skill** or single **Concept Node**. |
+| **Deployment (Tiered Block)** | Represents a multi-step **System** or **Project Deliverable**. |
+| **PVC / Storage (Cylinder)** | Represents a **Data Store**, database, or information source. |
+| **Service (Star)** | Represents a public **API**, communication bridge, or high-level goal. |
+| **Security Shield** | Represents **Constraints**, security rules, or project boundaries. |
+| **Platform Node** | Represents foundational pillars and core infrastructure topics. |
+| **Networking Wires & Particles** | Visualizes relationship connections and information flow in 3D. |
+| **Cursor-Focused Zoom** | Smooth 3D camera controls that let you inspect deep details or fly out to see the big picture. |
+
+---
+
+## 🛠️ Technology Behind Dora
+
+- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS 4, Shadcn UI
+- **3D Graphics**: Three.js WebGL Engine, Custom Raycaster Navigation, Shader Halos
+- **Database**: Supabase PostgreSQL with Drizzle ORM
+- **Icons**: Lucide Icons
+- **Language**: TypeScript 5 (Strict Mode, 0 compile errors)
+
+---
+
+## 🏁 Quick Start (Run it locally in 3 minutes)
+
+### 1. Clone & Install
 ```bash
 git clone https://github.com/rsnarsna/dora.git
 cd dora
 npm install
 ```
 
-### 2. Configure Environment Variables
-Copy `.env.example` to `.env.local`:
-```bash
-cp .env.example .env.local
-```
-
-Fill in your Supabase database credentials and Jira Cloud API credentials:
+### 2. Configure Your Environment (`.env.local`)
+Create a `.env.local` file in the root directory:
 ```env
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
-DATABASE_URL=postgresql://postgres:your_password@db.supabase.co:5432/postgres
+# Supabase PostgreSQL
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-key
+DATABASE_URL=postgresql://postgres:your-password@db.supabase.co:5432/postgres
 
-# Jira Cloud API Configuration
-JIRA_EMAIL=your_email@example.com
-JIRA_TOKEN=your_atlassian_api_token
+# Jira Cloud API (Optional - for syncing live Jira boards)
+JIRA_EMAIL=your-email@domain.com
+JIRA_TOKEN=your-atlassian-api-token
 ```
 
-### 3. Run Development Server
+### 3. Start the Development Server
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open **[http://localhost:3000/dashboard](http://localhost:3000/dashboard)** to start using Dora!
 
 ---
 
-## 🔒 Security & Privacy
+## 🧭 Page Directory / Where to Go
 
-- All API keys, tokens, and database connection strings are kept exclusively on the server in `.env.local` and `.gitignore`.
-- Personal notes, self-targets, and custom roadmap groupings are stored in your private Supabase database and are never published to team Jira comments.
+| Navigation Link | URL | Purpose |
+|---|---|---|
+| **Overview** | `/dashboard` | Daily Jira tasks, focus timer, subtask progress, and personal notes. |
+| **Strategic Roadmap** | `/dashboard/roadmap` | Drag-and-drop sequencing (`Step 1: Focus`, `Step 2: Next`) saved to Supabase. |
+| **Knowledge Universe** | `/dashboard/knowledge` | 2D/3D concept thinking canvas: create once, connect once, reuse everywhere. |
+| **K8s Practice Lab** | `/dashboard/k8s-lab` | 3D live cluster simulation and learning playground. |
+| **K8s Draw** | `/dashboard/k8s-draw` | 3D visual architecture drawing tool with export to YAML and PNG. |
+
+---
+
+## 🔒 Privacy Guarantee
+
+- Your personal notes, self-targets, 3D knowledge graphs, and custom roadmap groups stay private in your Supabase database.
+- Nothing you write in your personal logs or roadmaps is ever sent to team Jira ticket comments or public boards.
 
 ---
 
