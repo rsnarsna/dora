@@ -30,3 +30,45 @@ export const appConfig = pgTable("app_config", {
   config: jsonb("config").notNull().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
+
+export const knowledgeNodes = pgTable("knowledge_nodes", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  type: text("type").notNull().default("concept"),
+  title: text("title").notNull(),
+  summary: text("summary").default(""),
+  content: text("content").default(""),
+  visualShape: text("visual_shape").default("hex"),
+  visualColor: text("visual_color").default("#326ce5"),
+  tags: jsonb("tags").default([]),
+  jiraTaskKeys: jsonb("jira_task_keys").default([]),
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const knowledgeRelations = pgTable("knowledge_relations", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  sourceNodeId: text("source_node_id").notNull(),
+  targetNodeId: text("target_node_id").notNull(),
+  relationType: text("relation_type").notNull().default("relates_to"),
+  label: text("label").default(""),
+  animated: boolean("animated").default(true),
+  properties: jsonb("properties").default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const knowledgeClusters = pgTable("knowledge_clusters", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description").default(""),
+  color: text("color").default("#0052cc"),
+  nodeIds: jsonb("node_ids").default([]),
+  positions2D: jsonb("positions_2d").default({}),
+  positions3D: jsonb("positions_3d").default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+

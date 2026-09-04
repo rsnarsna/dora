@@ -13,7 +13,8 @@ import {
   RotateCcw,
   Layers,
   Gamepad2,
-  PenTool
+  PenTool,
+  Compass
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -351,6 +352,22 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
                 <Link 
+                  href="/dashboard/knowledge" 
+                  className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <Compass className="w-5 h-5 text-indigo-500" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                Knowledge Universe (2D/3D)
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link 
                   href="/dashboard/k8s-lab" 
                   className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
@@ -510,35 +527,47 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     <div className="w-full border-r border-border bg-card flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="p-3.5 border-b border-border space-y-2.5">
-        {/* Navigation Switchers: Overview & Roadmap */}
-        <div className="grid grid-cols-4 gap-1 p-0.5 bg-muted/50 rounded-lg border border-border">
+        {/* Navigation Switchers: Overview, Roadmap, Knowledge, K8s Lab, Draw */}
+        <div className="grid grid-cols-5 gap-0.5 p-0.5 bg-muted/50 rounded-lg border border-border">
           <Link
             href="/dashboard"
-            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            className="flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            title="Overview"
           >
             <LayoutList className="w-3 h-3 shrink-0" />
-            <span>Overview</span>
+            <span className="hidden xl:inline">Overview</span>
           </Link>
           <Link
             href="/dashboard/roadmap"
-            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            className="flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            title="Strategic Roadmap"
           >
             <Layers className="w-3 h-3 shrink-0" />
-            <span>Roadmap</span>
+            <span className="hidden xl:inline">Roadmap</span>
+          </Link>
+          <Link
+            href="/dashboard/knowledge"
+            className="flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            title="2D/3D Knowledge Universe"
+          >
+            <Compass className="w-3 h-3 shrink-0 text-indigo-500" />
+            <span className="hidden xl:inline">Universe</span>
           </Link>
           <Link
             href="/dashboard/k8s-lab"
-            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            className="flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            title="K8s Lab"
           >
             <Gamepad2 className="w-3 h-3 shrink-0" />
-            <span>K8s Lab</span>
+            <span className="hidden xl:inline">Lab</span>
           </Link>
           <Link
             href="/dashboard/k8s-draw"
-            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            className="flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            title="K8s Draw"
           >
             <PenTool className="w-3 h-3 shrink-0" />
-            <span>Draw</span>
+            <span className="hidden xl:inline">Draw</span>
           </Link>
         </div>
 
