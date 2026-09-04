@@ -8,6 +8,21 @@ This block is written and re-added by `next dev` â€” verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+# ðŸŒŸ Primary System Philosophy: Cognitive Scaffolding (NON-NEGOTIABLE)
+
+> ### **"The application should assist our thinking, not replace our thinking."**
+> 
+> **MANDATORY INSTRUCTION FOR ALL PROMPTS, CODE GENERATION, AND ARCHITECTURAL CHANGES:**
+> Every single feature, component, prompt response, or modification to this repository MUST strictly abide by this governing principle:
+> 
+> 1. **High Human Agency**: Never design autonomous "black-box" systems that make decisions on behalf of the user or dictate schedules, commitments, or workflows. The user is the strategic decision-maker; the software is their intellectual workbench and cognitive exoskeleton.
+> 2. **Transparent Situational Clarity**: Provide high-density, legible, and un-obscured context (deadlines, buffer margins, subtask breakdowns, custom workstreams) so the user can reason accurately and make their own choices.
+> 3. **Sandboxed Reflection**: Maintain high-leverage spaces for personal thinking (Strategic Roadmap swimlanes, self-targets, daily timestamped notes, task aliases, architecture sandboxes) that stay deliberately decoupled from rigid corporate Jira boards.
+> 4. **Assistive UI/UX**: Interfaces must reduce friction in capturing thoughts and visualizing trade-offs, never impose rigid prescriptive workflows or cognitive lock-in.
+
+---
+
+
 # shadcn/ui Component Usage Rules
 
 ## Core Rule
@@ -20,32 +35,32 @@ Only "shadcn/ui" components are allowed as UI primitives. No duplicate, custom-b
 
 ## 2. Zero Duplication Policy
 - Before creating any UI element, search "components/ui/" first.
-- If a matching primitive exists (e.g. Card), it MUST be reused — never re-implemented.
+- If a matching primitive exists (e.g. Card), it MUST be reused ï¿½ never re-implemented.
 - If a variant is needed (e.g. a "stat card", "pricing card"), it MUST be built by **composing** the existing shadcn primitive (Card + CardHeader + CardContent), not by creating a new base component.
 - Composed variants go in "components/features/" or "components/composed/", and internally import from "components/ui/" only.
 
 ## 3. No Editing Base Primitives
-- Files inside "components/ui/*" are generated code — **never edit directly** for one-off styling needs.
+- Files inside "components/ui/*" are generated code ï¿½ **never edit directly** for one-off styling needs.
 - Any customization (variant, size, color) MUST be done via:
   - "cva" (class-variance-authority) variant extension in a wrapper, OR
   - Tailwind utility classes passed via "className" prop at usage site.
-- If a genuinely new variant is required at the primitive level (e.g. new Button variant), edit the "variants" object inside the shadcn primitive file directly (this is the one sanctioned exception) — do not fork it into a new file.
+- If a genuinely new variant is required at the primitive level (e.g. new Button variant), edit the "variants" object inside the shadcn primitive file directly (this is the one sanctioned exception) ï¿½ do not fork it into a new file.
 
 ## 4. Composition Pattern (required for all "new" components)
 `
 components/
-+-- ui/                    # shadcn primitives only — untouched structurally
-¦   +-- card.tsx
-¦   +-- button.tsx
-¦   +-- input.tsx
++-- ui/                    # shadcn primitives only ï¿½ untouched structurally
+ï¿½   +-- card.tsx
+ï¿½   +-- button.tsx
+ï¿½   +-- input.tsx
 +-- composed/              # composed from ui/ primitives only
-¦   +-- stat-card.tsx      # uses Card, CardHeader, CardContent
-¦   +-- confirm-dialog.tsx # uses Dialog, Button
+ï¿½   +-- stat-card.tsx      # uses Card, CardHeader, CardContent
+ï¿½   +-- confirm-dialog.tsx # uses Dialog, Button
 +-- features/               # domain-specific, composed from composed/ + ui/
     +-- invoice-summary.tsx
 `
 
-Example — correct composition:
+Example ï¿½ correct composition:
 `	sx
 // components/composed/stat-card.tsx
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -61,16 +76,16 @@ export function StatCard({ label, value }: { label: string; value: string }) {
 `
 Never do this:
 `	sx
-// ? forbidden — hand-rolled card duplicate
+// ? forbidden ï¿½ hand-rolled card duplicate
 export function StatCard() {
   return <div className="rounded-lg border p-4 shadow-sm">...</div>
 }
 `
 
-## 5. Forms — Strict Validation Rule
+## 5. Forms ï¿½ Strict Validation Rule
 - All forms MUST use shadcn "Form" (wraps "react-hook-form") + "zod" schema.
 - No manual "useState"-driven form handling when a Form primitive exists.
-- Every form field MUST have a zod schema entry — no unvalidated inputs reach a server action.
+- Every form field MUST have a zod schema entry ï¿½ no unvalidated inputs reach a server action.
 
 `	sx
 const schema = z.object({

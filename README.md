@@ -5,6 +5,20 @@
 
 ---
 
+## 💡 Core Philosophy
+
+> ### **"The application should assist our thinking, not replace our thinking."**
+> 
+> **Dora** is engineered as a **cognitive exoskeleton**, not an autonomous micromanager. Traditional productivity suites often try to replace human thinking by enforcing rigid, black-box algorithms, opaque automated schedules, and bureaucratic workflows.
+> 
+> Dora takes the opposite approach:
+> - **Transparent Situational Clarity**: Surfaces deadlines, buffer margins, subtask dependencies, and multi-workspace loads cleanly so **you** can evaluate trade-offs and decide where to focus.
+> - **High-Agency Sandboxing**: The Strategic Roadmap and Custom Groupings are strictly isolated from Jira's team boards, giving you a private strategic scratchpad to structure, sequence (`Step 1: Active Focus`, `Step 2: Planned Next`), and execute work according to your own mental model.
+> - **Self-Directed Discipline**: Compare external corporate deadlines against your internal self-target commitments, write rapid timestamped thoughts, and practice technical systems without corporate noise.
+
+---
+
+
 ## 🌟 Overview
 
 **Dora** is a high-performance personal command center built on top of Jira Cloud and Supabase. While Jira boards can quickly become cluttered with hundreds of tickets and complex team workflows, **Dora** introduces a clean personal execution layer:
