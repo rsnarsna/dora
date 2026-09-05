@@ -7,11 +7,6 @@ interface PwaContextType {
   isInstalled: boolean;
   isInstallable: boolean;
   installPwa: () => Promise<void>;
-  activeBadgeCount: number;
-  setActiveBadgeCount: (count: number) => void;
-  triggerTestBadge: () => void;
-  requestNotificationPermission: () => Promise<NotificationPermission>;
-  notificationPermission: NotificationPermission;
 }
 
 const PwaContext = createContext<PwaContextType | null>(null);
@@ -31,6 +26,8 @@ interface PwaProviderProps {
   isSyncing?: boolean;
 }
 
+const APP_TITLE = 'Dora — Personal Management & Strategic Roadmap';
+
 export const PwaProvider: React.FC<PwaProviderProps> = ({
   children,
   activeWorkCount = 0,
@@ -39,68 +36,64 @@ export const PwaProvider: React.FC<PwaProviderProps> = ({
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
-  const [manualCount, setManualCount] = useState<number | null>(null);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
 
-  // Effective badge count: manual override (e.g. testing) or calculated active portal work
-  const effectiveCount = manualCount !== null ? manualCount : activeWorkCount;
-
-  // Register Service Worker
+  // Register Service Worker & Listen for Native App Life-Cycle
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((reg) => {
-          console.log('✅ Dora PWA: Service worker active with scope:', reg.scope);
-        })
-        .catch((err) => {
-          console.warn('⚠️ Dora PWA: Service worker registration note:', err);
-        });
-
-      // Detect standalone mode
-      const isStandalone = 
-        window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as any).standalone === true;
-      setIsInstalled(isStandalone);
-
-      // Listen for install availability
-      const handleBeforeInstall = (e: Event) => {
-        e.preventDefault();
-        setDeferredPrompt(e);
-      };
-
-      const handleAppInstalled = () => {
-        setIsInstalled(true);
-        setDeferredPrompt(null);
-      };
-
-      window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-      window.addEventListener('appinstalled', handleAppInstalled);
-
-      if (typeof Notification !== 'undefined') {
-        setNotificationPermission(Notification.permission);
-      }
-
-      return () => {
-        window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-        window.removeEventListener('appinstalled', handleAppInstalled);
-      };
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      return;
     }
+
+    navigator.serviceWorker
+      .register('/sw.js')
+      .catch((err) => {
+        console.warn('PWA: Service worker registration note:', err);
+      });
+
+    // Detect standalone mode (already installed & running as standalone desktop/mobile app)
+    const isStandalone = 
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true;
+    setIsInstalled(isStandalone);
+
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
   }, []);
 
-  // Sync Dynamic PWA App Badge and Canvas Favicon whenever work status updates
+  // Synchronize Dynamic Native App Badge, Tab Favicon, and Document Title
   useEffect(() => {
-    updatePwaNativeBadge(effectiveCount);
+    // 1. Native OS Taskbar / Mobile Launcher Badge
+    updatePwaNativeBadge(activeWorkCount);
+
+    // 2. Real-Time In-Tab Favicon Counter & Glow Ring
     updateDynamicFavicon({
-      count: effectiveCount,
+      count: activeWorkCount,
       isTimerRunning,
       isSyncing,
     });
-  }, [effectiveCount, isTimerRunning, isSyncing]);
+
+    // 3. Document Title with Unread / Active Indicator
+    if (typeof document !== 'undefined') {
+      document.title = activeWorkCount > 0 ? `(${activeWorkCount}) ${APP_TITLE}` : APP_TITLE;
+    }
+  }, [activeWorkCount, isTimerRunning, isSyncing]);
 
   const installPwa = useCallback(async () => {
     if (!deferredPrompt) {
-      alert('To install Dora on your device:\n\n• Chrome/Edge: Click the Install icon in the browser address bar.\n• iOS Safari: Tap Share ➔ "Add to Home Screen".');
       return;
     }
     deferredPrompt.prompt();
@@ -111,37 +104,15 @@ export const PwaProvider: React.FC<PwaProviderProps> = ({
     setDeferredPrompt(null);
   }, [deferredPrompt]);
 
-  const triggerTestBadge = useCallback(() => {
-    setManualCount((prev) => {
-      const next = prev === null ? activeWorkCount + 1 : (prev + 1) % 10;
-      return next;
-    });
-  }, [activeWorkCount]);
-
-  const requestNotificationPermission = useCallback(async (): Promise<NotificationPermission> => {
-    if (typeof Notification === 'undefined') return 'denied';
-    try {
-      const perm = await Notification.requestPermission();
-      setNotificationPermission(perm);
-      return perm;
-    } catch {
-      return 'denied';
-    }
-  }, []);
-
   const value = useMemo(
     () => ({
       isInstalled,
       isInstallable: !!deferredPrompt,
       installPwa,
-      activeBadgeCount: effectiveCount,
-      setActiveBadgeCount: (c: number) => setManualCount(c),
-      triggerTestBadge,
-      requestNotificationPermission,
-      notificationPermission,
     }),
-    [isInstalled, deferredPrompt, installPwa, effectiveCount, triggerTestBadge, requestNotificationPermission, notificationPermission]
+    [isInstalled, deferredPrompt, installPwa]
   );
 
   return <PwaContext.Provider value={value}>{children}</PwaContext.Provider>;
 };
+

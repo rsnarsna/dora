@@ -35,7 +35,6 @@ import { buildJiraHierarchy } from '@/lib/jira-utils';
 import { AppConfig, DEFAULT_CONFIG, JiraDomainConfig } from '@/lib/app-config';
 import { AccountConfigDialog } from '@/components/account-config-dialog';
 import { PwaProvider } from '@/components/pwa/pwa-provider';
-import { PwaStatusButton } from '@/components/pwa/pwa-status-button';
 
 export function DashboardLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -404,27 +403,27 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <PwaStatusButton
-                inProgressCount={inProgressCount}
-                activeSprintCount={activeSprintCount}
-              />
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleJiraSync}
                 disabled={isSyncing}
-                className="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-md border border-blue-200 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-8 gap-1.5 bg-blue-50/50 hover:bg-blue-100/70 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-xs font-semibold"
               >
                 <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
                 <span>{isSyncing ? 'Syncing...' : 'Sync Jira'}</span>
-              </button>
+              </Button>
               <span className="text-xs text-muted-foreground hidden sm:inline">Active Profile:</span>
-              <button 
+              <Button 
+                variant="outline"
+                size="sm"
                 onClick={() => setIsAccountConfigOpen(true)}
-                className="inline-flex items-center gap-1.5 bg-muted/60 hover:bg-muted text-xs font-semibold px-2.5 py-1 rounded-md border border-border cursor-pointer transition-colors"
+                className="h-8 gap-1.5 text-xs font-semibold bg-muted/60 hover:bg-muted border-border"
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 <span>{activeAccount.name}</span>
-                <span className="text-[10px] text-muted-foreground font-normal">({activeAccount.role})</span>
-              </button>
+                <span className="text-[10px] text-muted-foreground font-normal hidden md:inline">({activeAccount.role})</span>
+              </Button>
             </div>
           </header>
           <div className="flex-1 overflow-auto">
