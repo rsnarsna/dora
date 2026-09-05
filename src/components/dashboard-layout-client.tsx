@@ -34,6 +34,8 @@ import { syncJiraDataAction } from '@/server/actions/jira-sync-actions';
 import { buildJiraHierarchy } from '@/lib/jira-utils';
 import { AppConfig, DEFAULT_CONFIG, JiraDomainConfig } from '@/lib/app-config';
 import { AccountConfigDialog } from '@/components/account-config-dialog';
+import { PwaProvider } from '@/components/pwa/pwa-provider';
+import { PwaStatusButton } from '@/components/pwa/pwa-status-button';
 
 export function DashboardLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -186,6 +188,20 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
     return await saveAppConfigAction(newConfig);
   };
 
+  // Active work metrics for dynamic PWA icon badging & status updates
+  const inProgressCount = useMemo(() => {
+    return filteredIssues.filter(i => {
+      const s = (i.status || '').toLowerCase();
+      return s.includes('in progress') || s.includes('doing') || s.includes('active');
+    }).length;
+  }, [filteredIssues]);
+
+  const activeSprintCount = useMemo(() => {
+    return filteredIssues.filter(i => i.in_active_sprint && (i.status || '').toLowerCase() !== 'done').length;
+  }, [filteredIssues]);
+
+  const activeWorkCount = inProgressCount > 0 ? inProgressCount : activeSprintCount;
+
   if (isLoading) {
     return <div className="flex h-screen items-center justify-center">Loading dashboard...</div>;
   }
@@ -207,10 +223,11 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
       updateAppConfig,
       loadData 
     }}>
-      <SidebarProvider 
-        defaultOpen={appConfig.sidebar.defaultOpen} 
-        style={{ '--sidebar-width': appConfig.sidebar.width } as React.CSSProperties}
-      >
+      <PwaProvider activeWorkCount={activeWorkCount} isSyncing={isSyncing}>
+        <SidebarProvider 
+          defaultOpen={appConfig.sidebar.defaultOpen} 
+          style={{ '--sidebar-width': appConfig.sidebar.width } as React.CSSProperties}
+        >
         <Sidebar variant="sidebar" collapsible="icon">
           <SidebarContent>
             <SidebarNav
@@ -387,6 +404,10 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <PwaStatusButton
+                inProgressCount={inProgressCount}
+                activeSprintCount={activeSprintCount}
+              />
               <button
                 onClick={handleJiraSync}
                 disabled={isSyncing}
@@ -411,6 +432,7 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
           </div>
         </main>
       </SidebarProvider>
+      </PwaProvider>
 
       {/* Account Settings & Configuration Dialog */}
       <AccountConfigDialog
