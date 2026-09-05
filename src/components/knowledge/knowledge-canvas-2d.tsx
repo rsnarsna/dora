@@ -60,6 +60,36 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
   // Compute node positions based on active cluster or fallback
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
 
+  // Container pixel dimensions for centering SVG wires with sub-pixel precision
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({
+    width: 1200,
+    height: 800,
+  });
+
+  // Track mouse world position during active connection drawing
+  const [mouseWorldPos, setMouseWorldPos] = useState<{ x: number; y: number } | null>(null);
+
+  // Measure container dimensions on mount and window resize
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateSize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setContainerSize({ width: rect.width, height: rect.height });
+        }
+      }
+    };
+    updateSize();
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(containerRef.current);
+    window.addEventListener('resize', updateSize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, []);
+
   // Touch Gesture Tracker
   const touchStateRef = useRef<{
     initialPinchDist: number;
@@ -156,6 +186,15 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    if (connectingSourceId) {
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (containerRect) {
+        const mouseX = (e.clientX - containerRect.left - containerSize.width / 2 - pan.x) / zoom;
+        const mouseY = (e.clientY - containerRect.top - containerSize.height / 2 - pan.y) / zoom;
+        setMouseWorldPos({ x: Math.round(mouseX), y: Math.round(mouseY) });
+      }
+    }
+
     if (isPanning) {
       setPan({
         x: e.clientX - panStart.x,
@@ -166,8 +205,8 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
       const containerRect = containerRef.current?.getBoundingClientRect();
       if (!containerRect) return;
 
-      const mouseX = (e.clientX - containerRect.left - containerRect.width / 2 - pan.x) / zoom;
-      const mouseY = (e.clientY - containerRect.top - containerRect.height / 2 - pan.y) / zoom;
+      const mouseX = (e.clientX - containerRect.left - containerSize.width / 2 - pan.x) / zoom;
+      const mouseY = (e.clientY - containerRect.top - containerSize.height / 2 - pan.y) / zoom;
 
       setPositions((prev) => ({
         ...prev,
@@ -321,13 +360,22 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
     } else if (touches.length === 1) {
       const touch = touches[0];
 
+      if (connectingSourceId) {
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (containerRect) {
+          const canvasTouchX = (touch.clientX - containerRect.left - containerSize.width / 2 - pan.x) / zoom;
+          const canvasTouchY = (touch.clientY - containerRect.top - containerSize.height / 2 - pan.y) / zoom;
+          setMouseWorldPos({ x: Math.round(canvasTouchX), y: Math.round(canvasTouchY) });
+        }
+      }
+
       if (draggingNodeId) {
         e.preventDefault();
         const containerRect = containerRef.current?.getBoundingClientRect();
         if (!containerRect) return;
 
-        const canvasTouchX = (touch.clientX - containerRect.left - containerRect.width / 2 - pan.x) / zoom;
-        const canvasTouchY = (touch.clientY - containerRect.top - containerRect.height / 2 - pan.y) / zoom;
+        const canvasTouchX = (touch.clientX - containerRect.left - containerSize.width / 2 - pan.x) / zoom;
+        const canvasTouchY = (touch.clientY - containerRect.top - containerSize.height / 2 - pan.y) / zoom;
 
         setPositions((prev) => ({
           ...prev,
@@ -576,7 +624,7 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
 
       {/* SVG Canvas for Relationship Wires */}
       <svg
-        className="absolute inset-0 w-full h-full pointer-events-none"
+        className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           transformOrigin: '50% 50%',
@@ -585,105 +633,177 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
         <defs>
           <marker
             id="arrowhead"
-            markerWidth="10"
-            markerHeight="7"
-            refX="9"
-            refY="3.5"
+            markerWidth="12"
+            markerHeight="8"
+            refX="10"
+            refY="4"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary)" opacity="0.85" />
+            <polygon points="0 0, 11 4, 0 8" fill="var(--primary)" opacity="0.9" />
+          </marker>
+          <marker
+            id="arrowhead-highlighted"
+            markerWidth="12"
+            markerHeight="8"
+            refX="10"
+            refY="4"
+            orient="auto"
+          >
+            <polygon points="0 0, 11 4, 0 8" fill="#3b82f6" />
+          </marker>
+          <marker
+            id="arrowhead-connecting"
+            markerWidth="12"
+            markerHeight="8"
+            refX="10"
+            refY="4"
+            orient="auto"
+          >
+            <polygon points="0 0, 11 4, 0 8" fill="#f59e0b" />
           </marker>
         </defs>
 
-        {visibleRelations.map((rel) => {
-          const sourcePos = positions[rel.sourceNodeId] || { x: 0, y: 0 };
-          const targetPos = positions[rel.targetNodeId] || { x: 0, y: 0 };
+        {/* Center SVG coordinate system with HTML nodes layer */}
+        <g transform={`translate(${containerSize.width / 2}, ${containerSize.height / 2})`}>
+          {visibleRelations.map((rel) => {
+            const sourcePos = positions[rel.sourceNodeId] || { x: 0, y: 0 };
+            const targetPos = positions[rel.targetNodeId] || { x: 0, y: 0 };
 
-          const dx = targetPos.x - sourcePos.x;
-          const dy = targetPos.y - sourcePos.y;
-          const cx1 = sourcePos.x + dx * 0.45;
-          const cy1 = sourcePos.y;
-          const cx2 = targetPos.x - dx * 0.45;
-          const cy2 = targetPos.y;
+            const dx = targetPos.x - sourcePos.x;
+            const dy = targetPos.y - sourcePos.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < 5) return null;
 
-          const midX = (sourcePos.x + targetPos.x) / 2;
-          const midY = (sourcePos.y + targetPos.y) / 2;
-          const pathData = `M ${sourcePos.x} ${sourcePos.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${targetPos.x} ${targetPos.y}`;
+            const ux = dx / dist;
+            const uy = dy / dist;
 
-          const isRelHighlighted = selectedNodeId && (rel.sourceNodeId === selectedNodeId || rel.targetNodeId === selectedNodeId);
+            const isSourceExpanded = isNodeExpanded(rel.sourceNodeId);
+            const isTargetExpanded = isNodeExpanded(rel.targetNodeId);
 
-          return (
-            <g key={rel.id} className="transition-opacity duration-300">
-              {/* Outer Glow / Tap Path */}
-              <path
-                d={pathData}
-                fill="none"
-                stroke={isRelHighlighted ? 'var(--primary)' : 'var(--primary)'}
-                strokeWidth={isRelHighlighted ? '8' : '4'}
-                strokeOpacity={isRelHighlighted ? '0.35' : '0.12'}
-              />
+            // Card boundary distances so arrowheads and wires terminate at card edges
+            const srcRadius = isSourceExpanded ? 76 : 34;
+            const tgtRadius = isTargetExpanded ? 84 : 40;
 
-              {/* Main Line with animated flow */}
-              <path
-                d={pathData}
-                fill="none"
-                stroke={isRelHighlighted ? 'var(--primary)' : 'var(--primary)'}
-                strokeWidth={isRelHighlighted ? '2.8' : '2'}
-                strokeOpacity={isRelHighlighted ? '0.95' : '0.65'}
-                strokeDasharray={rel.animated ? '6,4' : 'none'}
-                markerEnd="url(#arrowhead)"
-              />
+            const startX = sourcePos.x + ux * srcRadius;
+            const startY = sourcePos.y + uy * srcRadius;
+            const endX = targetPos.x - ux * tgtRadius;
+            const endY = targetPos.y - uy * tgtRadius;
 
-              {/* Animated Data Flow Packet */}
-              {(isFlowSimulating || rel.animated) && (
-                <circle r={isRelHighlighted ? '4.5' : '3.5'} fill={isRelHighlighted ? 'var(--primary)' : '#326ce5'} className="drop-shadow-sm">
-                  <animateMotion
-                    dur={isRelHighlighted ? '2s' : '3.5s'}
-                    repeatCount="indefinite"
-                    path={pathData}
-                  />
-                </circle>
-              )}
+            const cdx = endX - startX;
+            const cdy = endY - startY;
 
-              {/* Relationship Type Pill */}
-              {rel.label && (
-                <g 
-                  transform={`translate(${midX}, ${midY})`}
-                  className="cursor-pointer pointer-events-auto"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onDeleteRelation && confirm(`Remove relationship "${rel.label}"?`)) {
-                      onDeleteRelation(rel.id);
-                    }
-                  }}
-                >
-                  <title>{`Click to remove relationship "${rel.label}"`}</title>
-                  <rect
-                    x="-48"
-                    y="-12"
-                    width="96"
-                    height="24"
-                    rx="12"
-                    fill="var(--card)"
-                    stroke={isRelHighlighted ? 'var(--primary)' : 'var(--border)'}
-                    strokeWidth={isRelHighlighted ? '1.8' : '1.2'}
-                    className="shadow-sm hover:scale-105 transition-transform"
-                  />
-                  <text
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill="var(--foreground)"
-                    fontSize="9.5"
-                    fontWeight="700"
-                    className="font-mono select-none"
+            let cx1: number, cy1: number, cx2: number, cy2: number;
+            if (Math.abs(cdx) >= Math.abs(cdy)) {
+              const bend = Math.max(Math.abs(cdx) * 0.45, 25);
+              const dirX = cdx >= 0 ? 1 : -1;
+              cx1 = startX + dirX * bend;
+              cy1 = startY;
+              cx2 = endX - dirX * bend;
+              cy2 = endY;
+            } else {
+              const bend = Math.max(Math.abs(cdy) * 0.45, 25);
+              const dirY = cdy >= 0 ? 1 : -1;
+              cx1 = startX;
+              cy1 = startY + dirY * bend;
+              cx2 = endX;
+              cy2 = endY - dirY * bend;
+            }
+
+            const pathData = `M ${startX} ${startY} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${endX} ${endY}`;
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+
+            const isRelHighlighted = selectedNodeId && (rel.sourceNodeId === selectedNodeId || rel.targetNodeId === selectedNodeId);
+
+            return (
+              <g key={rel.id} className="transition-opacity duration-300">
+                {/* Outer Glow / Tap Path */}
+                <path
+                  d={pathData}
+                  fill="none"
+                  stroke={isRelHighlighted ? 'var(--primary)' : 'var(--primary)'}
+                  strokeWidth={isRelHighlighted ? '8' : '4'}
+                  strokeOpacity={isRelHighlighted ? '0.35' : '0.12'}
+                />
+
+                {/* Main Line with animated flow */}
+                <path
+                  d={pathData}
+                  fill="none"
+                  stroke={isRelHighlighted ? 'var(--primary)' : 'var(--primary)'}
+                  strokeWidth={isRelHighlighted ? '2.8' : '2'}
+                  strokeOpacity={isRelHighlighted ? '0.95' : '0.65'}
+                  strokeDasharray={rel.animated ? '6,4' : 'none'}
+                  markerEnd={isRelHighlighted ? 'url(#arrowhead-highlighted)' : 'url(#arrowhead)'}
+                />
+
+                {/* Animated Data Flow Packet */}
+                {(isFlowSimulating || rel.animated) && (
+                  <circle r={isRelHighlighted ? '4.5' : '3.5'} fill={isRelHighlighted ? 'var(--primary)' : '#326ce5'} className="drop-shadow-sm">
+                    <animateMotion
+                      dur={isRelHighlighted ? '2s' : '3.5s'}
+                      repeatCount="indefinite"
+                      path={pathData}
+                    />
+                  </circle>
+                )}
+
+                {/* Relationship Type Pill */}
+                {rel.label && (
+                  <g 
+                    transform={`translate(${midX}, ${midY})`}
+                    className="cursor-pointer pointer-events-auto"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onDeleteRelation && confirm(`Remove relationship "${rel.label}"?`)) {
+                        onDeleteRelation(rel.id);
+                      }
+                    }}
                   >
-                    {rel.label}
-                  </text>
-                </g>
-              )}
+                    <title>{`Click to remove relationship "${rel.label}"`}</title>
+                    <rect
+                      x="-48"
+                      y="-12"
+                      width="96"
+                      height="24"
+                      rx="12"
+                      fill="var(--card)"
+                      stroke={isRelHighlighted ? 'var(--primary)' : 'var(--border)'}
+                      strokeWidth={isRelHighlighted ? '1.8' : '1.2'}
+                      className="shadow-sm hover:scale-105 transition-transform"
+                    />
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill="var(--foreground)"
+                      fontSize="9.5"
+                      fontWeight="700"
+                      className="font-mono select-none"
+                    >
+                      {rel.label}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+
+          {/* Live Connecting Rubber-Band Wire */}
+          {connectingSourceId && mouseWorldPos && positions[connectingSourceId] && (
+            <g className="transition-all">
+              <line
+                x1={positions[connectingSourceId].x}
+                y1={positions[connectingSourceId].y}
+                x2={mouseWorldPos.x}
+                y2={mouseWorldPos.y}
+                stroke="#f59e0b"
+                strokeWidth="2.5"
+                strokeDasharray="6,4"
+                markerEnd="url(#arrowhead-connecting)"
+              />
             </g>
-          );
-        })}
+          )}
+        </g>
       </svg>
 
       {/* Nodes Layer */}
