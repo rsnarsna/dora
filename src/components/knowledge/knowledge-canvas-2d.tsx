@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { KnowledgeNode, KnowledgeRelation, KnowledgeCluster } from '@/types/knowledge';
 import { KnowledgeNodeCard2D } from './knowledge-node-card-2d';
-import { Plus, Move, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Plus, Move, ZoomIn, ZoomOut, RotateCcw, Sparkles, Layers, Maximize2, Link as LinkIcon, Compass, Info } from 'lucide-react';
 
 interface KnowledgeCanvas2DProps {
   nodes: KnowledgeNode[];
@@ -48,6 +48,20 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
   // Compute node positions based on active cluster or fallback
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
 
+  // Touch Gesture Tracker
+  const touchStateRef = useRef<{
+    initialPinchDist: number;
+    initialZoom: number;
+    initialPan: { x: number; y: number };
+    startMidpoint: { x: number; y: number };
+    touchStartTime: number;
+    touchStartPos: { x: number; y: number };
+    activeTouches: number;
+  } | null>(null);
+
+  // Last tap time for double-tap detection
+  const lastTapRef = useRef<{ time: number; x: number; y: number }>({ time: 0, x: 0, y: 0 });
+
   // Sync positions from activeCluster or auto-align in circle/grid if missing
   useEffect(() => {
     const saved = activeCluster?.positions2D || {};
@@ -89,7 +103,9 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
     );
   }, [relations, visibleNodeIds]);
 
-  // Canvas Pan Handlers
+  // -------------------------------------------------------------
+  // MOUSE HANDLERS
+  // -------------------------------------------------------------
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 0 && (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg')) {
       setIsPanning(true);
@@ -123,37 +139,36 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
   };
 
   const handleMouseUp = () => {
-    if (isPanning) {
-      setIsPanning(false);
-    }
+    if (isPanning) setIsPanning(false);
     if (draggingNodeId) {
       onUpdatePositions(activeCluster?.id || null, positions);
       setDraggingNodeId(null);
     }
   };
 
-  // Node Drag Start Handler
-  const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
-    e.stopPropagation();
-    if (connectingSourceId && connectingSourceId !== nodeId) {
-      // Connect nodes!
-      onConnectNodes(connectingSourceId, nodeId);
-      setConnectingSourceId(null);
-      return;
-    }
-
+  const startDraggingNode = (clientX: number, clientY: number, nodeId: string) => {
     const pos = positions[nodeId] || { x: 0, y: 0 };
     const containerRect = containerRef.current?.getBoundingClientRect();
     if (!containerRect) return;
 
-    const mouseX = (e.clientX - containerRect.left - containerRect.width / 2 - pan.x) / zoom;
-    const mouseY = (e.clientY - containerRect.top - containerRect.height / 2 - pan.y) / zoom;
+    const canvasMouseX = (clientX - containerRect.left - containerRect.width / 2 - pan.x) / zoom;
+    const canvasMouseY = (clientY - containerRect.top - containerRect.height / 2 - pan.y) / zoom;
 
     setDragOffset({
-      x: mouseX - pos.x,
-      y: mouseY - pos.y,
+      x: canvasMouseX - pos.x,
+      y: canvasMouseY - pos.y,
     });
     setDraggingNodeId(nodeId);
+  };
+
+  const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
+    e.stopPropagation();
+    if (connectingSourceId && connectingSourceId !== nodeId) {
+      onConnectNodes(connectingSourceId, nodeId);
+      setConnectingSourceId(null);
+      return;
+    }
+    startDraggingNode(e.clientX, e.clientY, nodeId);
   };
 
   // Double click on canvas to create node
@@ -168,11 +183,159 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
     }
   };
 
+  // -------------------------------------------------------------
+  // TOUCH SCREEN HANDLERS (Pinch-to-Zoom, Two-Finger Pan, Touch Drag)
+  // -------------------------------------------------------------
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touches = e.touches;
+    const now = Date.now();
+
+    if (touches.length === 1) {
+      const touch = touches[0];
+      const target = e.target as HTMLElement;
+      const isCanvasBg = target === containerRef.current || target.tagName === 'svg';
+
+      // Check for double-tap on canvas
+      const timeDiff = now - lastTapRef.current.time;
+      const distDiff = Math.hypot(touch.clientX - lastTapRef.current.x, touch.clientY - lastTapRef.current.y);
+      if (isCanvasBg && timeDiff < 300 && distDiff < 25 && onCreateNodeAt) {
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (containerRect) {
+          const canvasX = Math.round((touch.clientX - containerRect.left - containerRect.width / 2 - pan.x) / zoom);
+          const canvasY = Math.round((touch.clientY - containerRect.top - containerRect.height / 2 - pan.y) / zoom);
+          onCreateNodeAt(canvasX, canvasY);
+        }
+      }
+      lastTapRef.current = { time: now, x: touch.clientX, y: touch.clientY };
+
+      if (isCanvasBg) {
+        setIsPanning(true);
+        setPanStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+        onSelectNode(null);
+      }
+
+      touchStateRef.current = {
+        initialPinchDist: 0,
+        initialZoom: zoom,
+        initialPan: { ...pan },
+        startMidpoint: { x: touch.clientX, y: touch.clientY },
+        touchStartTime: now,
+        touchStartPos: { x: touch.clientX, y: touch.clientY },
+        activeTouches: 1,
+      };
+    } else if (touches.length === 2) {
+      // Pinch-to-zoom & two-finger pan initiated
+      e.preventDefault();
+      const t1 = touches[0];
+      const t2 = touches[1];
+      const pinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+
+      setIsPanning(false);
+      if (draggingNodeId) {
+        setDraggingNodeId(null);
+      }
+
+      touchStateRef.current = {
+        initialPinchDist: pinchDist,
+        initialZoom: zoom,
+        initialPan: { ...pan },
+        startMidpoint: { x: midX, y: midY },
+        touchStartTime: now,
+        touchStartPos: { x: midX, y: midY },
+        activeTouches: 2,
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touches = e.touches;
+    const touchState = touchStateRef.current;
+    if (!touchState) return;
+
+    if (touches.length === 2 && touchState.initialPinchDist > 0) {
+      e.preventDefault();
+      const t1 = touches[0];
+      const t2 = touches[1];
+      const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const currentMidX = (t1.clientX + t2.clientX) / 2;
+      const currentMidY = (t1.clientY + t2.clientY) / 2;
+
+      // Calculate pinch zoom
+      const pinchFactor = currentDist / touchState.initialPinchDist;
+      const nextZoom = Math.min(Math.max(touchState.initialZoom * pinchFactor, 0.35), 2.8);
+      setZoom(nextZoom);
+
+      // Two-finger midpoint pan
+      const deltaX = currentMidX - touchState.startMidpoint.x;
+      const deltaY = currentMidY - touchState.startMidpoint.y;
+      setPan({
+        x: touchState.initialPan.x + deltaX,
+        y: touchState.initialPan.y + deltaY,
+      });
+    } else if (touches.length === 1) {
+      const touch = touches[0];
+
+      if (draggingNodeId) {
+        e.preventDefault();
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (!containerRect) return;
+
+        const canvasTouchX = (touch.clientX - containerRect.left - containerRect.width / 2 - pan.x) / zoom;
+        const canvasTouchY = (touch.clientY - containerRect.top - containerRect.height / 2 - pan.y) / zoom;
+
+        setPositions((prev) => ({
+          ...prev,
+          [draggingNodeId]: {
+            x: Math.round(canvasTouchX - dragOffset.x),
+            y: Math.round(canvasTouchY - dragOffset.y),
+          },
+        }));
+      } else if (isPanning) {
+        e.preventDefault();
+        setPan({
+          x: touch.clientX - panStart.x,
+          y: touch.clientY - panStart.y,
+        });
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (draggingNodeId) {
+      onUpdatePositions(activeCluster?.id || null, positions);
+      setDraggingNodeId(null);
+    }
+    if (isPanning) setIsPanning(false);
+
+    if (e.touches.length === 0) {
+      touchStateRef.current = null;
+    }
+  };
+
+  const handleNodeTouchStart = (e: React.TouchEvent, nodeId: string) => {
+    e.stopPropagation();
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      if (connectingSourceId && connectingSourceId !== nodeId) {
+        onConnectNodes(connectingSourceId, nodeId);
+        setConnectingSourceId(null);
+        return;
+      }
+      startDraggingNode(touch.clientX, touch.clientY, nodeId);
+    }
+  };
+
   // Reset zoom & pan
   const handleResetView = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
   };
+
+  const selectedNode = useMemo(() => {
+    return nodes.find((n) => n.id === selectedNodeId) || null;
+  }, [nodes, selectedNodeId]);
 
   return (
     <div
@@ -180,50 +343,103 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       onDoubleClick={handleDoubleClick}
-      className="relative w-full h-full overflow-hidden bg-dot-grid cursor-default select-none"
+      className="relative w-full h-full overflow-hidden bg-dot-grid cursor-default select-none touch-none"
       style={{
         backgroundImage: `radial-gradient(circle, var(--border) 1px, transparent 1px)`,
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
         backgroundPosition: `${pan.x}px ${pan.y}px`,
       }}
     >
-      {/* Interactive Controls Overlay */}
-      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-card/90 backdrop-blur-md p-1.5 rounded-lg border border-border shadow-md">
+      {/* Interactive Controls Overlay with Touch-Friendly Hit Targets */}
+      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 bg-card/95 backdrop-blur-md p-2 rounded-xl border border-border shadow-lg">
         <button
-          onClick={() => setZoom((z) => Math.min(z + 0.15, 2.5))}
-          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setZoom((z) => Math.min(z + 0.2, 2.8))}
+          className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors active:scale-95"
           title="Zoom In"
         >
-          <ZoomIn className="w-3.5 h-3.5" />
+          <ZoomIn className="w-4 h-4" />
         </button>
-        <span className="text-[10px] font-mono text-muted-foreground w-10 text-center font-bold">
+        <span className="text-xs font-mono text-muted-foreground w-12 text-center font-bold">
           {Math.round(zoom * 100)}%
         </span>
         <button
-          onClick={() => setZoom((z) => Math.max(z - 0.15, 0.4))}
-          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setZoom((z) => Math.max(z - 0.2, 0.35))}
+          className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors active:scale-95"
           title="Zoom Out"
         >
-          <ZoomOut className="w-3.5 h-3.5" />
+          <ZoomOut className="w-4 h-4" />
         </button>
-        <div className="w-[1px] h-3.5 bg-border mx-0.5" />
+        <div className="w-[1px] h-5 bg-border mx-1" />
         <button
           onClick={handleResetView}
-          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="px-2.5 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-semibold transition-colors active:scale-95"
           title="Reset View"
         >
           <RotateCcw className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Reset</span>
         </button>
+        <div className="w-[1px] h-5 bg-border mx-1" />
+        <span className="text-[10px] text-muted-foreground/80 font-mono hidden md:inline px-1">
+          Pinch to zoom • Drag to pan
+        </span>
       </div>
+
+      {/* Selected Node Floating Details Pill (Interactive HUD) */}
+      {selectedNode && (
+        <div 
+          className="absolute top-4 left-4 z-20 bg-card/95 backdrop-blur-md px-3.5 py-2 rounded-xl border border-primary/30 shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2"
+          style={{ borderLeft: `4px solid ${selectedNode.visualColor || '#326ce5'}` }}
+        >
+          <div className="flex flex-col min-w-0 max-w-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                {selectedNode.type}
+              </span>
+              <span className="text-foreground font-bold text-xs truncate">
+                {selectedNode.title}
+              </span>
+            </div>
+            {selectedNode.summary && (
+              <span className="text-[11px] text-muted-foreground truncate">
+                {selectedNode.summary}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0 border-l border-border pl-2.5">
+            {onMorphTo3D && (
+              <button
+                onClick={() => onMorphTo3D(selectedNode)}
+                className="px-2.5 py-1 rounded-md bg-primary/10 hover:bg-primary hover:text-primary-foreground text-primary text-xs font-semibold flex items-center gap-1 transition-colors"
+                title="View in 3D Space"
+              >
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                <span>3D View</span>
+              </button>
+            )}
+            <button
+              onClick={() => setConnectingSourceId(selectedNode.id)}
+              className="px-2 py-1 rounded-md bg-muted hover:bg-muted/80 text-foreground text-xs font-semibold flex items-center gap-1 transition-colors"
+              title="Connect to another concept"
+            >
+              <LinkIcon className="w-3 h-3" />
+              <span>Connect</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Connecting status banner */}
       {connectingSourceId && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-amber-500 text-amber-950 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-2 animate-bounce">
-          <span>Click any target concept to establish connection</span>
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-amber-500 text-amber-950 px-4 py-2 rounded-full text-xs font-bold shadow-xl flex items-center gap-2 animate-bounce">
+          <span>Tap any target concept to establish relationship</span>
           <button
             onClick={() => setConnectingSourceId(null)}
-            className="underline font-normal text-[10px] ml-1"
+            className="underline font-normal text-xs ml-2"
           >
             Cancel
           </button>
@@ -247,7 +463,7 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary)" opacity="0.7" />
+            <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary)" opacity="0.75" />
           </marker>
         </defs>
 
@@ -255,7 +471,6 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
           const sourcePos = positions[rel.sourceNodeId] || { x: 0, y: 0 };
           const targetPos = positions[rel.targetNodeId] || { x: 0, y: 0 };
 
-          // Offset from center to approximate node border
           const dx = targetPos.x - sourcePos.x;
           const dy = targetPos.y - sourcePos.y;
           const cx1 = sourcePos.x + dx * 0.45;
@@ -268,12 +483,12 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
 
           return (
             <g key={rel.id} className="transition-opacity duration-300">
-              {/* Outer Glow / Hover Path */}
+              {/* Outer Glow / Tap Path */}
               <path
                 d={`M ${sourcePos.x} ${sourcePos.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${targetPos.x} ${targetPos.y}`}
                 fill="none"
                 stroke="var(--primary)"
-                strokeWidth="4"
+                strokeWidth="5"
                 strokeOpacity="0.15"
               />
 
@@ -282,11 +497,10 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
                 d={`M ${sourcePos.x} ${sourcePos.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${targetPos.x} ${targetPos.y}`}
                 fill="none"
                 stroke="var(--primary)"
-                strokeWidth="1.8"
-                strokeOpacity="0.7"
+                strokeWidth="2"
+                strokeOpacity="0.75"
                 strokeDasharray={rel.animated ? '6,4' : 'none'}
                 markerEnd="url(#arrowhead)"
-                className={rel.animated ? 'animate-[dash_20s_linear_infinite]' : ''}
               />
 
               {/* Relationship Type Pill */}
@@ -294,21 +508,21 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
                 <g transform={`translate(${midX}, ${midY})`}>
                   <rect
                     x="-45"
-                    y="-10"
+                    y="-11"
                     width="90"
-                    height="20"
-                    rx="10"
+                    height="22"
+                    rx="11"
                     fill="var(--card)"
                     stroke="var(--border)"
-                    strokeWidth="1"
-                    className="shadow-2xs"
+                    strokeWidth="1.2"
+                    className="shadow-sm"
                   />
                   <text
                     textAnchor="middle"
                     dominantBaseline="middle"
                     fill="var(--foreground)"
-                    fontSize="9"
-                    fontWeight="600"
+                    fontSize="9.5"
+                    fontWeight="700"
                     className="font-mono select-none"
                   >
                     {rel.label}
@@ -340,8 +554,9 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
                 transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
                 zIndex: selectedNodeId === node.id ? 10 : 1,
               }}
-              className="pointer-events-auto"
+              className="pointer-events-auto touch-manipulation"
               onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
+              onTouchStart={(e) => handleNodeTouchStart(e, node.id)}
             >
               <KnowledgeNodeCard2D
                 node={node}

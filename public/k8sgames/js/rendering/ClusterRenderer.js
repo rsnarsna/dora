@@ -37,6 +37,9 @@ export class ClusterRenderer {
         this.onResourceMoved = null;
         this._draggingResource = null;
         this._groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        this._touchPinchDist = 0;
+        this._touchStartTime = 0;
+        this._touchStartPos = new THREE.Vector2();
 
         this._initScene();
         this._initCamera();
@@ -146,31 +149,33 @@ export class ClusterRenderer {
 
             // Scale factor: smooth zoom step
             const scaleFactor = delta > 0 ? 1.08 : 0.92;
-
-            const currentDist = this.camera.position.distanceTo(this.controls.target);
-            const newDist = currentDist * scaleFactor;
-
-            // Enforce OrbitControls distance limits (minDistance / maxDistance)
-            if (scaleFactor < 1 && newDist < this.controls.minDistance) return;
-            if (scaleFactor > 1 && newDist > this.controls.maxDistance) return;
-
-            // Shift camera position and orbit target relative to the cursor focus point
-            // This ensures the 3D point under the mouse cursor remains invariant on screen
-            this.camera.position.set(
-                focusPoint.x + (this.camera.position.x - focusPoint.x) * scaleFactor,
-                focusPoint.y + (this.camera.position.y - focusPoint.y) * scaleFactor,
-                focusPoint.z + (this.camera.position.z - focusPoint.z) * scaleFactor
-            );
-
-            this.controls.target.set(
-                focusPoint.x + (this.controls.target.x - focusPoint.x) * scaleFactor,
-                focusPoint.y + (this.controls.target.y - focusPoint.y) * scaleFactor,
-                focusPoint.z + (this.controls.target.z - focusPoint.z) * scaleFactor
-            );
-
-            this.controls.update();
+            this._zoomTowardPoint(focusPoint, scaleFactor);
         };
         this.canvas.addEventListener('wheel', this._onWheel, { passive: false });
+    }
+
+    _zoomTowardPoint(focusPoint, scaleFactor) {
+        const currentDist = this.camera.position.distanceTo(this.controls.target);
+        const newDist = currentDist * scaleFactor;
+
+        // Enforce OrbitControls distance limits (minDistance / maxDistance)
+        if (scaleFactor < 1 && newDist < this.controls.minDistance) return;
+        if (scaleFactor > 1 && newDist > this.controls.maxDistance) return;
+
+        // Shift camera position and orbit target relative to focus point
+        this.camera.position.set(
+            focusPoint.x + (this.camera.position.x - focusPoint.x) * scaleFactor,
+            focusPoint.y + (this.camera.position.y - focusPoint.y) * scaleFactor,
+            focusPoint.z + (this.camera.position.z - focusPoint.z) * scaleFactor
+        );
+
+        this.controls.target.set(
+            focusPoint.x + (this.controls.target.x - focusPoint.x) * scaleFactor,
+            focusPoint.y + (this.controls.target.y - focusPoint.y) * scaleFactor,
+            focusPoint.z + (this.controls.target.z - focusPoint.z) * scaleFactor
+        );
+
+        this.controls.update();
     }
 
     _initLights() {
@@ -282,6 +287,9 @@ export class ClusterRenderer {
         this._onMouseMove = this._handleMouseMove.bind(this);
         this._onMouseDown = this._handleMouseDown.bind(this);
         this._onMouseUp = this._handleMouseUp.bind(this);
+        this._onTouchStart = this._handleTouchStart.bind(this);
+        this._onTouchMove = this._handleTouchMove.bind(this);
+        this._onTouchEnd = this._handleTouchEnd.bind(this);
         this._onResize = this._handleResize.bind(this);
         this._onContextMenu = (e) => {
             e.preventDefault();
@@ -309,6 +317,9 @@ export class ClusterRenderer {
         this.canvas.addEventListener('mousemove', this._onMouseMove);
         this.canvas.addEventListener('mousedown', this._onMouseDown);
         this.canvas.addEventListener('mouseup', this._onMouseUp);
+        this.canvas.addEventListener('touchstart', this._onTouchStart, { passive: false });
+        this.canvas.addEventListener('touchmove', this._onTouchMove, { passive: false });
+        this.canvas.addEventListener('touchend', this._onTouchEnd, { passive: false });
         this.canvas.addEventListener('contextmenu', this._onContextMenu);
         window.addEventListener('resize', this._onResize);
     }
@@ -397,6 +408,158 @@ export class ClusterRenderer {
         }
         this._didDrag = false;
         this._dragCandidate = null;
+    }
+
+    _handleTouchStart(event) {
+        const touches = event.touches;
+        if (touches.length === 2) {
+            // Two fingers: Pinch-to-zoom & two-finger pan
+            event.preventDefault();
+            this._touchPinchDist = Math.hypot(
+                touches[1].clientX - touches[0].clientX,
+                touches[1].clientY - touches[0].clientY
+            );
+            if (this._draggingResource) {
+                this._draggingResource = null;
+                this.controls.enabled = true;
+            }
+            this._dragCandidate = null;
+            return;
+        }
+
+        if (touches.length === 1) {
+            const touch = touches[0];
+            this._clickStart.set(touch.clientX, touch.clientY);
+            this._touchStartTime = Date.now();
+            this._touchStartPos.set(touch.clientX, touch.clientY);
+            this._didDrag = false;
+            this._dragCandidate = null;
+
+            const rect = this.canvas.getBoundingClientRect();
+            this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+            this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+            this.raycaster.setFromCamera(this.mouse, this.camera);
+            const intersects = this.raycaster.intersectObjects(this.pickableObjects, true);
+            if (intersects.length > 0) {
+                let target = intersects[0].object;
+                while (target.parent && !target.userData.resourceId) {
+                    target = target.parent;
+                }
+                if (target.userData.resourceId) {
+                    this._dragCandidate = target.userData.resourceId;
+                }
+            }
+        }
+    }
+
+    _handleTouchMove(event) {
+        const touches = event.touches;
+        if (touches.length === 2 && this._touchPinchDist > 0) {
+            event.preventDefault();
+            const currentDist = Math.hypot(
+                touches[1].clientX - touches[0].clientX,
+                touches[1].clientY - touches[0].clientY
+            );
+
+            if (currentDist > 0 && Math.abs(currentDist - this._touchPinchDist) > 3) {
+                const ratio = this._touchPinchDist / currentDist;
+                const scaleFactor = THREE.MathUtils.clamp(1 + (ratio - 1) * 0.45, 0.88, 1.14);
+
+                const midX = (touches[0].clientX + touches[1].clientX) / 2;
+                const midY = (touches[0].clientY + touches[1].clientY) / 2;
+                const rect = this.canvas.getBoundingClientRect();
+                const ndc = new THREE.Vector2(
+                    ((midX - rect.left) / rect.width) * 2 - 1,
+                    -((midY - rect.top) / rect.height) * 2 + 1
+                );
+
+                this._zoomRaycaster.setFromCamera(ndc, this.camera);
+                let focusPoint = null;
+                if (this.pickableObjects && this.pickableObjects.length > 0) {
+                    const hits = this._zoomRaycaster.intersectObjects(this.pickableObjects, true);
+                    if (hits.length > 0) focusPoint = hits[0].point;
+                }
+                if (!focusPoint) {
+                    const groundHit = new THREE.Vector3();
+                    if (this._zoomRaycaster.ray.intersectPlane(this._zoomGroundPlane, groundHit)) {
+                        focusPoint = groundHit;
+                    }
+                }
+                if (!focusPoint) focusPoint = this.controls.target.clone();
+
+                this._zoomTowardPoint(focusPoint, scaleFactor);
+                this._touchPinchDist = currentDist;
+            }
+            return;
+        }
+
+        if (touches.length === 1) {
+            const touch = touches[0];
+            const rect = this.canvas.getBoundingClientRect();
+            this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+            this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+            if (this._draggingResource) {
+                event.preventDefault();
+                const group = this.resourceMeshes.get(this._draggingResource);
+                if (group) {
+                    const limit = GRID_SIZE / 2;
+                    const pos = this._raycastGround(this.mouse);
+                    if (pos) {
+                        group.position.x = Math.max(-limit, Math.min(limit, pos.x));
+                        group.position.z = Math.max(-limit, Math.min(limit, pos.z));
+                    }
+                    this.connectionLines.updatePositions(this.resourceMeshes);
+                }
+                return;
+            }
+
+            if (this._dragCandidate) {
+                const dx = touch.clientX - this._clickStart.x;
+                const dy = touch.clientY - this._clickStart.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 8) {
+                    event.preventDefault();
+                    this._draggingResource = this._dragCandidate;
+                    this._dragCandidate = null;
+                    this.controls.enabled = false;
+                    this._didDrag = true;
+                }
+            }
+        }
+    }
+
+    _handleTouchEnd(event) {
+        if (this._draggingResource) {
+            const rid = this._draggingResource;
+            this._draggingResource = null;
+            this.controls.enabled = true;
+            const group = this.resourceMeshes.get(rid);
+            if (group && this.onResourceMoved) {
+                this.onResourceMoved(rid, { x: group.position.x, y: group.position.y, z: group.position.z });
+            }
+            this._didDrag = false;
+            this._dragCandidate = null;
+            return;
+        }
+
+        if (event.touches.length === 0) {
+            this._touchPinchDist = 0;
+            if (event.changedTouches.length === 1 && !this._didDrag) {
+                const touch = event.changedTouches[0];
+                const duration = Date.now() - this._touchStartTime;
+                const dist = Math.hypot(touch.clientX - this._touchStartPos.x, touch.clientY - this._touchStartPos.y);
+                if (duration < 300 && dist < 15) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                    this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                    this._performPick(true);
+                }
+            }
+            this._didDrag = false;
+            this._dragCandidate = null;
+        }
     }
 
     _handleResize() {
@@ -828,6 +991,9 @@ export class ClusterRenderer {
         this.canvas.removeEventListener('mousemove', this._onMouseMove);
         this.canvas.removeEventListener('mousedown', this._onMouseDown);
         this.canvas.removeEventListener('mouseup', this._onMouseUp);
+        this.canvas.removeEventListener('touchstart', this._onTouchStart);
+        this.canvas.removeEventListener('touchmove', this._onTouchMove);
+        this.canvas.removeEventListener('touchend', this._onTouchEnd);
         this.canvas.removeEventListener('contextmenu', this._onContextMenu);
         this.canvas.removeEventListener('wheel', this._onWheel);
         window.removeEventListener('resize', this._onResize);

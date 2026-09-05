@@ -250,25 +250,11 @@ export const KnowledgeCanvas3D: React.FC<KnowledgeCanvas3DProps> = ({
     controls.target.set(0, 0, 0);
     controlsRef.current = controls;
 
-    // Cursor-focused wheel zoom
+    // Helper to smoothly zoom camera and target relative to a 3D focus point
     const zoomRaycaster = new THREE.Raycaster();
     const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      );
-      zoomRaycaster.setFromCamera(ndc, camera);
-      const hitPoint = new THREE.Vector3();
-      const hit = zoomRaycaster.ray.intersectPlane(groundPlane, hitPoint);
-      const focus = hit ? hitPoint : controls.target.clone();
 
-      const delta = Math.sign(e.deltaY);
-      if (delta === 0) return;
-      const factor = delta > 0 ? 1.08 : 0.92;
-
+    const zoomAroundPoint = (focus: THREE.Vector3, factor: number) => {
       const currentDist = camera.position.distanceTo(controls.target);
       const newDist = currentDist * factor;
       if (factor < 1 && newDist < controls.minDistance) return;
@@ -286,7 +272,133 @@ export const KnowledgeCanvas3D: React.FC<KnowledgeCanvas3DProps> = ({
       );
       controls.update();
     };
+
+    // Cursor-focused wheel zoom
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      zoomRaycaster.setFromCamera(ndc, camera);
+      const hitPoint = new THREE.Vector3();
+      const hit = zoomRaycaster.ray.intersectPlane(groundPlane, hitPoint);
+      const focus = hit ? hitPoint : controls.target.clone();
+
+      const delta = Math.sign(e.deltaY);
+      if (delta === 0) return;
+      const factor = delta > 0 ? 1.08 : 0.92;
+      zoomAroundPoint(focus, factor);
+    };
     canvas.addEventListener('wheel', onWheel, { passive: false });
+
+    // Multitouch gesture handling (Pinch-to-zoom & Tap to inspect)
+    let initialPinchDist = 0;
+    let touchStartTime = 0;
+    let touchStartPos = { x: 0, y: 0 };
+    let lastTapTime = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        initialPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        touchStartTime = Date.now();
+        touchStartPos = { x: t.clientX, y: t.clientY };
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && initialPinchDist > 0) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        if (currentDist > 0 && Math.abs(currentDist - initialPinchDist) > 3) {
+          const ratio = initialPinchDist / currentDist;
+          const factor = THREE.MathUtils.clamp(1 + (ratio - 1) * 0.45, 0.88, 1.14);
+
+          const midX = (t1.clientX + t2.clientX) / 2;
+          const midY = (t1.clientY + t2.clientY) / 2;
+          const rect = canvas.getBoundingClientRect();
+          const ndc = new THREE.Vector2(
+            ((midX - rect.left) / rect.width) * 2 - 1,
+            -((midY - rect.top) / rect.height) * 2 + 1
+          );
+          zoomRaycaster.setFromCamera(ndc, camera);
+          const hitPoint = new THREE.Vector3();
+          const hit = zoomRaycaster.ray.intersectPlane(groundPlane, hitPoint);
+          const focus = hit ? hitPoint : controls.target.clone();
+
+          zoomAroundPoint(focus, factor);
+          initialPinchDist = currentDist;
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        initialPinchDist = 0;
+      }
+      if (e.changedTouches.length === 1 && e.touches.length === 0) {
+        const t = e.changedTouches[0];
+        const duration = Date.now() - touchStartTime;
+        const dist = Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y);
+
+        // Tap gesture (< 300ms duration and movement < 15px)
+        if (duration < 300 && dist < 15) {
+          const now = Date.now();
+          const timeSinceLastTap = now - lastTapTime;
+          lastTapTime = now;
+
+          const rect = canvas.getBoundingClientRect();
+          const ndc = new THREE.Vector2(
+            ((t.clientX - rect.left) / rect.width) * 2 - 1,
+            -((t.clientY - rect.top) / rect.height) * 2 + 1
+          );
+          clickRaycaster.setFromCamera(ndc, camera);
+
+          const pickables: THREE.Object3D[] = [];
+          meshMapRef.current.forEach((grp) => pickables.push(...grp.children));
+          const hits = clickRaycaster.intersectObjects(pickables, true);
+
+          if (hits.length > 0) {
+            let root: THREE.Object3D | null = hits[0].object;
+            while (root && !root.userData.nodeId) {
+              root = root.parent;
+            }
+            if (root && root.userData.node) {
+              onSelectNode(root.userData.node);
+
+              // Double-tap on node focuses camera smoothly
+              if (timeSinceLastTap < 350) {
+                const targetPos = root.position;
+                controls.target.set(targetPos.x, targetPos.y, targetPos.z);
+                controls.update();
+              }
+            }
+          } else {
+            // Tapped empty space
+            if (timeSinceLastTap < 350) {
+              // Double-tap resets camera view
+              camera.position.set(16, 14, 16);
+              controls.target.set(0, 0, 0);
+              controls.update();
+            } else {
+              onSelectNode(null);
+            }
+          }
+        }
+      }
+    };
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
 
     // 5. Lights
     const ambient = new THREE.AmbientLight(0x8899bb, 0.8);
@@ -403,6 +515,9 @@ export const KnowledgeCanvas3D: React.FC<KnowledgeCanvas3DProps> = ({
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('click', onPointerDown);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
       renderer.dispose();
     };
   }, []);
@@ -517,24 +632,56 @@ export const KnowledgeCanvas3D: React.FC<KnowledgeCanvas3DProps> = ({
     controlsRef.current.update();
   };
 
-  return (
-    <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-slate-950">
-      <canvas ref={canvasRef} className="w-full h-full block cursor-grab active:cursor-grabbing" />
+  const handleZoom = (factor: number) => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    const focus = controlsRef.current.target.clone();
+    const currentDist = cameraRef.current.position.distanceTo(focus);
+    const newDist = currentDist * factor;
+    if (factor < 1 && newDist < controlsRef.current.minDistance) return;
+    if (factor > 1 && newDist > controlsRef.current.maxDistance) return;
 
-      {/* 3D Navigation Controls */}
-      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-card/90 backdrop-blur-md p-1.5 rounded-lg border border-border shadow-md">
+    cameraRef.current.position.set(
+      focus.x + (cameraRef.current.position.x - focus.x) * factor,
+      focus.y + (cameraRef.current.position.y - focus.y) * factor,
+      focus.z + (cameraRef.current.position.z - focus.z) * factor
+    );
+    controlsRef.current.update();
+  };
+
+  return (
+    <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-slate-950 touch-none select-none">
+      <canvas ref={canvasRef} className="w-full h-full block cursor-grab active:cursor-grabbing touch-none" />
+
+      {/* 3D Navigation Controls with Touch hit targets */}
+      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-card/95 backdrop-blur-md p-1.5 rounded-xl border border-border shadow-lg">
+        <button
+          onClick={() => handleZoom(0.85)}
+          className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors active:scale-95"
+          title="Zoom In"
+        >
+          <ZoomIn className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => handleZoom(1.18)}
+          className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors active:scale-95"
+          title="Zoom Out"
+        >
+          <ZoomOut className="w-4 h-4" />
+        </button>
+        <div className="w-[1px] h-5 bg-border mx-0.5" />
         <button
           onClick={handleResetCamera}
-          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 text-xs font-semibold"
+          className="px-2.5 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 text-xs font-semibold active:scale-95"
           title="Reset Camera View"
         >
           <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset Camera</span>
+          <span className="hidden sm:inline">Reset</span>
         </button>
-        <div className="w-[1px] h-3.5 bg-border mx-0.5" />
-        <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono px-1">
+        <div className="w-[1px] h-5 bg-border mx-0.5" />
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono px-1">
           <Sparkles className="w-3 h-3 text-amber-500" />
-          <span>3D Concept Space</span>
+          <span className="hidden md:inline">Pinch to zoom • Drag to orbit • Double-tap to focus</span>
+          <span className="md:hidden text-[10px]">3D Space</span>
         </div>
       </div>
     </div>
