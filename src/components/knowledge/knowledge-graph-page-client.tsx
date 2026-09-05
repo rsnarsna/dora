@@ -9,7 +9,8 @@ import {
   saveKnowledgeRelationAction, 
   deleteKnowledgeRelationAction, 
   saveKnowledgeClusterAction, 
-  deleteKnowledgeClusterAction 
+  deleteKnowledgeClusterAction,
+  resetKnowledgeGraphAction
 } from '@/server/actions/knowledge-actions';
 import { KnowledgeCanvas2D } from './knowledge-canvas-2d';
 import { KnowledgeCanvas3D } from './knowledge-canvas-3d';
@@ -290,6 +291,17 @@ export const KnowledgeGraphPageClient: React.FC<KnowledgeGraphPageClientProps> =
     }
   };
 
+  const handleResetPlayground = async () => {
+    if (!activeAccount?.id) return;
+    showStatus('Resetting playground concepts...');
+    const data = await resetKnowledgeGraphAction(activeAccount.id);
+    setNodes(data.nodes);
+    setRelations(data.relations);
+    setClusters(data.clusters);
+    setSelectedNodeId(null);
+    showStatus('✅ Playground reset to initial multi-cluster architecture');
+  };
+
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden select-none">
       {/* Top Knowledge Command Header */}
@@ -417,6 +429,9 @@ export const KnowledgeGraphPageClient: React.FC<KnowledgeGraphPageClientProps> =
                 setViewMode('3d');
               }}
               onCreateNodeAt={(x, y) => handleCreateNode('New Topic Node', { x, y })}
+              onOpenInspector={(node) => setSelectedNodeId(node.id)}
+              onResetPlayground={handleResetPlayground}
+              onDeleteRelation={handleDeleteRelation}
             />
           ) : (
             <KnowledgeCanvas3D

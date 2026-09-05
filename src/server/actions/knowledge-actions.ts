@@ -417,3 +417,20 @@ export async function seedSampleKnowledgeGraphAction(accountId: string): Promise
     clusters: sampleClusters,
   };
 }
+
+/**
+ * Reset knowledge playground data for an account and re-seed the full multi-cluster architecture.
+ */
+export async function resetKnowledgeGraphAction(accountId: string): Promise<KnowledgeGraphData> {
+  if (!db) return { nodes: [], relations: [], clusters: [] };
+
+  try {
+    await db.delete(knowledgeRelations).where(eq(knowledgeRelations.accountId, accountId));
+    await db.delete(knowledgeClusters).where(eq(knowledgeClusters.accountId, accountId));
+    await db.delete(knowledgeNodes).where(eq(knowledgeNodes.accountId, accountId));
+    return await seedSampleKnowledgeGraphAction(accountId);
+  } catch (error) {
+    console.error('Failed to reset knowledge graph:', error);
+    return { nodes: [], relations: [], clusters: [] };
+  }
+}

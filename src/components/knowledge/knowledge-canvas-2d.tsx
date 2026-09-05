@@ -3,7 +3,7 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { KnowledgeNode, KnowledgeRelation, KnowledgeCluster } from '@/types/knowledge';
 import { KnowledgeNodeCard2D } from './knowledge-node-card-2d';
-import { Plus, Move, ZoomIn, ZoomOut, RotateCcw, Sparkles, Layers, Maximize2, Link as LinkIcon, Compass, Info } from 'lucide-react';
+import { Plus, Move, ZoomIn, ZoomOut, RotateCcw, Sparkles, Layers, Maximize2, Minimize2, Box, Link as LinkIcon, Compass, Info, RefreshCw } from 'lucide-react';
 
 interface KnowledgeCanvas2DProps {
   nodes: KnowledgeNode[];
@@ -16,6 +16,9 @@ interface KnowledgeCanvas2DProps {
   onConnectNodes: (sourceId: string, targetId: string) => void;
   onMorphTo3D?: (node: KnowledgeNode) => void;
   onCreateNodeAt?: (x: number, y: number) => void;
+  onOpenInspector?: (node: KnowledgeNode) => void;
+  onResetPlayground?: () => void;
+  onDeleteRelation?: (relationId: string) => void;
 }
 
 export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
@@ -29,6 +32,9 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
   onConnectNodes,
   onMorphTo3D,
   onCreateNodeAt,
+  onOpenInspector,
+  onResetPlayground,
+  onDeleteRelation,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -38,12 +44,18 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
+  // Minimal Icons vs Expanded Cards Mode (Defaults to Minimal Icons for clean architecture playground)
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
+  const [displayMode, setDisplayMode] = useState<'minimal' | 'expanded'>('minimal');
+  const [isFlowSimulating, setIsFlowSimulating] = useState<boolean>(true);
+
   // Connection source state
   const [connectingSourceId, setConnectingSourceId] = useState<string | null>(null);
 
   // Dragging node state
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const hasDraggedRef = useRef<boolean>(false);
 
   // Compute node positions based on active cluster or fallback
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
@@ -103,6 +115,34 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
     );
   }, [relations, visibleNodeIds]);
 
+  // Connection count per node for displaying link badges on minimal icons
+  const connectionCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of visibleRelations) {
+      counts[r.sourceNodeId] = (counts[r.sourceNodeId] || 0) + 1;
+      counts[r.targetNodeId] = (counts[r.targetNodeId] || 0) + 1;
+    }
+    return counts;
+  }, [visibleRelations]);
+
+  // Toggle expansion of an individual node
+  const handleToggleExpandNode = useCallback((nodeId: string) => {
+    setExpandedNodeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+  }, []);
+
+  const isNodeExpanded = useCallback((nodeId: string) => {
+    if (displayMode === 'expanded') return true;
+    return expandedNodeIds.has(nodeId) || selectedNodeId === nodeId;
+  }, [displayMode, expandedNodeIds, selectedNodeId]);
+
   // -------------------------------------------------------------
   // MOUSE HANDLERS
   // -------------------------------------------------------------
@@ -122,6 +162,7 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
         y: e.clientY - panStart.y,
       });
     } else if (draggingNodeId) {
+      hasDraggedRef.current = true;
       const containerRect = containerRef.current?.getBoundingClientRect();
       if (!containerRect) return;
 
@@ -141,7 +182,9 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
   const handleMouseUp = () => {
     if (isPanning) setIsPanning(false);
     if (draggingNodeId) {
-      onUpdatePositions(activeCluster?.id || null, positions);
+      if (hasDraggedRef.current) {
+        onUpdatePositions(activeCluster?.id || null, positions);
+      }
       setDraggingNodeId(null);
     }
   };
@@ -154,6 +197,7 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
     const canvasMouseX = (clientX - containerRect.left - containerRect.width / 2 - pan.x) / zoom;
     const canvasMouseY = (clientY - containerRect.top - containerRect.height / 2 - pan.y) / zoom;
 
+    hasDraggedRef.current = false;
     setDragOffset({
       x: canvasMouseX - pos.x,
       y: canvasMouseY - pos.y,
@@ -388,6 +432,90 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
         </span>
       </div>
 
+      {/* Interactive Playground Control Bar */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-card/95 backdrop-blur-md p-1.5 rounded-xl border border-border shadow-lg">
+        {/* Minimal Icons vs Expanded Cards Switcher */}
+        <div className="flex items-center bg-muted/70 p-0.5 rounded-lg border border-border/60 mr-1">
+          <button
+            onClick={() => {
+              setDisplayMode('minimal');
+              setExpandedNodeIds(new Set());
+            }}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 ${
+              displayMode === 'minimal'
+                ? 'bg-card text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            title="Show minimal icons (Click any node to expand)"
+          >
+            <Box className="w-3 h-3 text-blue-500" />
+            <span>Minimal Icons</span>
+          </button>
+          <button
+            onClick={() => setDisplayMode('expanded')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 ${
+              displayMode === 'expanded'
+                ? 'bg-card text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            title="Expand all concept cards"
+          >
+            <Maximize2 className="w-3 h-3 text-indigo-500" />
+            <span>Expanded Cards</span>
+          </button>
+        </div>
+
+        {/* Live Flow Toggle */}
+        <button
+          onClick={() => setIsFlowSimulating(!isFlowSimulating)}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-colors ${
+            isFlowSimulating
+              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+              : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+          }`}
+          title="Toggle animated data flow packets"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+          <span className="hidden sm:inline">Live Flow</span>
+        </button>
+
+        {/* Quick Link Mode */}
+        <button
+          onClick={() => {
+            if (selectedNodeId) {
+              setConnectingSourceId(selectedNodeId);
+            } else if (visibleNodes.length > 0) {
+              setConnectingSourceId(visibleNodes[0].id);
+            }
+          }}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-colors ${
+            connectingSourceId
+              ? 'bg-amber-500 text-amber-950 font-bold'
+              : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+          }`}
+          title="Quick Link two concepts"
+        >
+          <LinkIcon className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Connect</span>
+        </button>
+
+        {/* Reset Playground Button */}
+        {onResetPlayground && (
+          <button
+            onClick={() => {
+              if (confirm('Reset playground to default multi-cluster architecture? Any unsaved edits will be refreshed.')) {
+                onResetPlayground();
+              }
+            }}
+            className="px-2 py-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-[11px] font-semibold flex items-center gap-1 transition-colors"
+            title="Reset playground with initial sample concepts"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span className="hidden md:inline">Reset Playground</span>
+          </button>
+        )}
+      </div>
+
       {/* Selected Node Floating Details Pill (Interactive HUD) */}
       {selectedNode && (
         <div 
@@ -435,7 +563,7 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
 
       {/* Connecting status banner */}
       {connectingSourceId && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-amber-500 text-amber-950 px-4 py-2 rounded-full text-xs font-bold shadow-xl flex items-center gap-2 animate-bounce">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-amber-500 text-amber-950 px-4 py-2 rounded-full text-xs font-bold shadow-xl flex items-center gap-2 animate-bounce">
           <span>Tap any target concept to establish relationship</span>
           <button
             onClick={() => setConnectingSourceId(null)}
@@ -463,7 +591,7 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary)" opacity="0.75" />
+            <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary)" opacity="0.85" />
           </marker>
         </defs>
 
@@ -480,42 +608,66 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
 
           const midX = (sourcePos.x + targetPos.x) / 2;
           const midY = (sourcePos.y + targetPos.y) / 2;
+          const pathData = `M ${sourcePos.x} ${sourcePos.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${targetPos.x} ${targetPos.y}`;
+
+          const isRelHighlighted = selectedNodeId && (rel.sourceNodeId === selectedNodeId || rel.targetNodeId === selectedNodeId);
 
           return (
             <g key={rel.id} className="transition-opacity duration-300">
               {/* Outer Glow / Tap Path */}
               <path
-                d={`M ${sourcePos.x} ${sourcePos.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${targetPos.x} ${targetPos.y}`}
+                d={pathData}
                 fill="none"
-                stroke="var(--primary)"
-                strokeWidth="5"
-                strokeOpacity="0.15"
+                stroke={isRelHighlighted ? 'var(--primary)' : 'var(--primary)'}
+                strokeWidth={isRelHighlighted ? '8' : '4'}
+                strokeOpacity={isRelHighlighted ? '0.35' : '0.12'}
               />
 
               {/* Main Line with animated flow */}
               <path
-                d={`M ${sourcePos.x} ${sourcePos.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${targetPos.x} ${targetPos.y}`}
+                d={pathData}
                 fill="none"
-                stroke="var(--primary)"
-                strokeWidth="2"
-                strokeOpacity="0.75"
+                stroke={isRelHighlighted ? 'var(--primary)' : 'var(--primary)'}
+                strokeWidth={isRelHighlighted ? '2.8' : '2'}
+                strokeOpacity={isRelHighlighted ? '0.95' : '0.65'}
                 strokeDasharray={rel.animated ? '6,4' : 'none'}
                 markerEnd="url(#arrowhead)"
               />
 
+              {/* Animated Data Flow Packet */}
+              {(isFlowSimulating || rel.animated) && (
+                <circle r={isRelHighlighted ? '4.5' : '3.5'} fill={isRelHighlighted ? 'var(--primary)' : '#326ce5'} className="drop-shadow-sm">
+                  <animateMotion
+                    dur={isRelHighlighted ? '2s' : '3.5s'}
+                    repeatCount="indefinite"
+                    path={pathData}
+                  />
+                </circle>
+              )}
+
               {/* Relationship Type Pill */}
               {rel.label && (
-                <g transform={`translate(${midX}, ${midY})`}>
+                <g 
+                  transform={`translate(${midX}, ${midY})`}
+                  className="cursor-pointer pointer-events-auto"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onDeleteRelation && confirm(`Remove relationship "${rel.label}"?`)) {
+                      onDeleteRelation(rel.id);
+                    }
+                  }}
+                >
+                  <title>{`Click to remove relationship "${rel.label}"`}</title>
                   <rect
-                    x="-45"
-                    y="-11"
-                    width="90"
-                    height="22"
-                    rx="11"
+                    x="-48"
+                    y="-12"
+                    width="96"
+                    height="24"
+                    rx="12"
                     fill="var(--card)"
-                    stroke="var(--border)"
-                    strokeWidth="1.2"
-                    className="shadow-sm"
+                    stroke={isRelHighlighted ? 'var(--primary)' : 'var(--border)'}
+                    strokeWidth={isRelHighlighted ? '1.8' : '1.2'}
+                    className="shadow-sm hover:scale-105 transition-transform"
                   />
                   <text
                     textAnchor="middle"
@@ -544,6 +696,9 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
       >
         {visibleNodes.map((node) => {
           const pos = positions[node.id] || { x: 0, y: 0 };
+          const expanded = isNodeExpanded(node.id);
+          const isSelected = selectedNodeId === node.id;
+
           return (
             <div
               key={node.id}
@@ -552,7 +707,7 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
                 left: '50%',
                 top: '50%',
                 transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
-                zIndex: selectedNodeId === node.id ? 10 : 1,
+                zIndex: isSelected ? 30 : expanded ? 20 : 10,
               }}
               className="pointer-events-auto touch-manipulation"
               onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
@@ -561,11 +716,15 @@ export const KnowledgeCanvas2D: React.FC<KnowledgeCanvas2DProps> = ({
               <KnowledgeNodeCard2D
                 node={node}
                 clusters={clusters}
-                isSelected={selectedNodeId === node.id}
+                isSelected={isSelected}
+                isExpanded={expanded}
+                onToggleExpand={handleToggleExpandNode}
                 onSelect={onSelectNode}
                 onStartConnect={(id) => setConnectingSourceId(id)}
                 onMorphTo3D={onMorphTo3D}
+                onOpenInspector={onOpenInspector}
                 isConnecting={connectingSourceId === node.id}
+                connectedCount={connectionCounts[node.id] || 0}
               />
             </div>
           );
