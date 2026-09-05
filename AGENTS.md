@@ -125,3 +125,10 @@ const form = useForm<z.infer<typeof schema>>({
 - The codebase must strictly consist of reusable .tsx/.ts React components and Next.js structured files inside the src/ directory.
 - No legacy scripting (Python, standalone vanilla JS UI generation, or raw DOM manipulation scripts).
 - Everything must be built with maximum modularity and reusability in mind (using React Component composition, Server Actions, and Tailwind CSS).
+
+## 11. Kubernetes (K8s) Architecture & Concept Memory Reference
+- **Canonical Feature Guide**: All Kubernetes primitives, controllers, networking resources, storage schemas, and operational command outputs are documented in [docs/k8s-features-reference.md](docs/k8s-features-reference.md).
+- **Architecture Synchronization**:
+  - The **K8s 3D Architecture Studio** (/dashboard/k8s-draw) maps visually to declarative Kubernetes manifests (Pod, Deployment, StatefulSet, DaemonSet, Service, Ingress, PVC, etc.).
+  - The **2D/3D Knowledge Universe** (/dashboard/knowledge) serves as a conceptual thinking whiteboard where Kubernetes primitives and broader systems concepts can be linked, clustered, and transformed into 3D models.
+  - Whenever generating, explaining, or visualizing Kubernetes architectures, agents MUST refer to the simple language, clear specs, and topological relationships defined in docs/k8s-features-reference.md.

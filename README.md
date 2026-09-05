@@ -84,6 +84,8 @@ Dora borrows the modular, self-healing design of Kubernetes and brings it to per
 | **Networking Wires & Particles** | Visualizes relationship connections and information flow in 3D. |
 | **Cursor-Focused Zoom** | Smooth 3D camera controls that let you inspect deep details or fly out to see the big picture. |
 
+> 📖 **Deep Dive Documentation**: For a complete 1-by-1 breakdown of all Kubernetes resources, declarative YAML specs, real kubectl command outputs, and architectural relationships, see [**Kubernetes Features & Architecture Guide**](docs/k8s-features-reference.md).
+
 ---
 
 ## 🛠️ Technology Behind Dora
