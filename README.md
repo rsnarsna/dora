@@ -35,26 +35,17 @@ Here is a simple, plain-English breakdown of every major feature in Dora:
 
 ---
 
-### 2. 🎨 K8s Architecture Draw (3D Whiteboard)
-> *Sketch and design distributed cloud architectures in an interactive 3D space.*
+### 2. 🎨 K8s 3D Architecture Studio & Cloud Environment
+> *Design, map, and inspect distributed cloud architectures directly in 3D.*
 
-- **Drag and Drop**: Pick real cloud components from the palette (Pods, Deployments, Services, Ingresses, Databases, Storage) and place them onto a 3D grid.
+- **Interactive 3D Workspace**: Pick real cloud components from the palette (Pods, Deployments, Services, Ingresses, Databases, Storage Volumes) and place them onto the 3D grid.
 - **Draw Connections**: Click one resource and click another to establish networking and traffic flows.
-- **Cursor-Focused Zoom**: Zoom in and out exactly where your mouse is pointing—never losing your spot.
-- **Export**: Save your architecture as a clean PNG image, share it with a link, or export it to standard Kubernetes YAML.
+- **Cursor-Focused Zoom**: Zoom in and out exactly where your mouse is pointing—inspecting fine details or flying out for the big picture.
+- **Export & Portability**: Save your architecture as a clean PNG image, share it with a link, or export it to standard Kubernetes YAML.
 
 ---
 
-### 3. 🎮 K8s Practice Lab (3D Cluster Simulator)
-> *Learn and experiment with Kubernetes systems hands-on in a live 3D sandbox.*
-
-- **Interactive 3D Visualizer**: See how computing nodes, pods, and deployments behave in real time.
-- **Experiment Safely**: Scale workloads, simulate node failures, and test self-healing architectures without breaking any real servers.
-- **Deep Understanding**: Watch how traffic flows across services and networks through animated 3D particle beams.
-
----
-
-### 4. 🗺️ Strategic Roadmap & Execution Sequencing
+### 3. 🗺️ Strategic Roadmap & Execution Sequencing
 > *Organize your tasks step-by-step without altering team Jira boards.*
 
 - **Independent Swimlanes**: Group Jira tasks into your own logical buckets (e.g. *Week 1: Foundations*, *Week 2: Telemetry*, *Upcoming*).
@@ -67,7 +58,7 @@ Here is a simple, plain-English breakdown of every major feature in Dora:
 
 ---
 
-### 5. 🎯 Personal Discipline & Task Command Center
+### 4. 🎯 Personal Discipline & Task Command Center
 > *Your daily execution workbench.*
 
 - **Self-Target vs. Jira Due Date**: Set your own personal target date to build in buffer time before the official deadline.
@@ -143,8 +134,7 @@ Open **[http://localhost:3000/dashboard](http://localhost:3000/dashboard)** to s
 | **Overview** | `/dashboard` | Daily Jira tasks, focus timer, subtask progress, and personal notes. |
 | **Strategic Roadmap** | `/dashboard/roadmap` | Drag-and-drop sequencing (`Step 1: Focus`, `Step 2: Next`) saved to Supabase. |
 | **Knowledge Universe** | `/dashboard/knowledge` | 2D/3D concept thinking canvas: create once, connect once, reuse everywhere. |
-| **K8s Practice Lab** | `/dashboard/k8s-lab` | 3D live cluster simulation and learning playground. |
-| **K8s Draw** | `/dashboard/k8s-draw` | 3D visual architecture drawing tool with export to YAML and PNG. |
+| **K8s Architecture** | `/dashboard/k8s-draw` | 3D visual cloud architecture studio with YAML and PNG export. |
 
 ---
 

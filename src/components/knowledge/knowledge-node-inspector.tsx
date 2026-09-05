@@ -25,7 +25,6 @@ import {
   Star,
   Shield,
   Layers,
-  Gamepad2,
   PenTool
 } from 'lucide-react';
 import Link from 'next/link';
@@ -388,37 +387,28 @@ export const KnowledgeNodeInspector: React.FC<KnowledgeNodeInspectorProps> = ({
           </div>
         </div>
 
-        {/* Kubernetes & 3D Simulation Bridge */}
+        {/* Kubernetes 3D Environment Bridge */}
         <div className="space-y-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-              <Gamepad2 className="w-3.5 h-3.5 text-primary" />
-              K8s 3D Simulation & Architecture
+              <PenTool className="w-3.5 h-3.5 text-primary" />
+              K8s 3D Architecture Canvas
             </label>
             <Badge variant="secondary" className="text-[9px] font-mono">
               3D Sandbox
             </Badge>
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Test this concept inside the interactive Kubernetes 3D simulator or map it into the architecture whiteboard.
+            Map and connect this concept with cloud workloads, data stores, and ingress gateways in the 3D architecture studio.
           </p>
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <Link
-              href="/dashboard/k8s-draw"
-              className="flex items-center justify-center gap-1.5 p-2 rounded-md border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-colors shadow-2xs"
-            >
-              <PenTool className="w-3.5 h-3.5 text-indigo-500" />
-              <span>K8s 3D Draw</span>
-            </Link>
-            <Link
-              href="/dashboard/k8s-lab"
-              className="flex items-center justify-center gap-1.5 p-2 rounded-md border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-colors shadow-2xs"
-            >
-              <Gamepad2 className="w-3.5 h-3.5 text-blue-500" />
-              <span>Simulate in Lab</span>
-            </Link>
-          </div>
+          <Link
+            href="/dashboard/k8s-draw"
+            className="flex items-center justify-center gap-1.5 p-2 rounded-md border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-colors shadow-2xs w-full"
+          >
+            <PenTool className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Open in K8s 3D Architecture Studio</span>
+          </Link>
         </div>
 
         {/* Semantic Relationships Graph */}
