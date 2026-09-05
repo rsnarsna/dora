@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { 
   SidebarProvider, 
   SidebarTrigger, 
+  SidebarRail,
   Sidebar, 
   SidebarContent,
   SidebarFooter,
@@ -328,6 +329,7 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>
+          <SidebarRail />
         </Sidebar>
 
         <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-background">
@@ -339,6 +341,17 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
               </Link>
 
               <div className="hidden md:flex items-center gap-1 ml-3 border-l border-border pl-3">
+                <Link
+                  href="/dashboard/knowledge"
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                    pathname === '/dashboard/knowledge' 
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <Compass className="w-3.5 h-3.5 text-indigo-500" />
+                  Knowledge Universe
+                </Link>
                 <Link
                   href="/dashboard"
                   className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
@@ -359,17 +372,6 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
                 >
                   <Layers className="w-3.5 h-3.5" />
                   Strategic Roadmap
-                </Link>
-                <Link
-                  href="/dashboard/knowledge"
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                    pathname === '/dashboard/knowledge' 
-                      ? 'bg-primary/10 text-primary' 
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  }`}
-                >
-                  <Compass className="w-3.5 h-3.5 text-indigo-500" />
-                  Knowledge Universe
                 </Link>
                 <Link
                   href="/dashboard/k8s-draw"

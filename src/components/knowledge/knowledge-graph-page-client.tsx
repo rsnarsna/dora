@@ -291,7 +291,7 @@ export const KnowledgeGraphPageClient: React.FC<KnowledgeGraphPageClientProps> =
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background overflow-hidden select-none">
+    <div className="flex flex-col h-full bg-background overflow-hidden select-none">
       {/* Top Knowledge Command Header */}
       <header className="h-14 border-b border-border bg-card/80 backdrop-blur-md px-4 flex items-center justify-between gap-3 shrink-0 z-20">
         {/* Left: Concept Title & Cluster Context Selector */}

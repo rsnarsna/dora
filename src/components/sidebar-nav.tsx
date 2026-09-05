@@ -24,8 +24,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { CreateTaskDialog } from '@/components/create-task-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useSidebar } from '@/components/ui/sidebar';
+import { useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 interface SidebarNavProps {
   nodes: JiraTaskNode[];
@@ -306,6 +307,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     return result;
   };
 
+  const pathname = usePathname();
   const { state } = useSidebar();
 
   if (state === 'collapsed') {
@@ -313,14 +315,41 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
     return (
       <div className="flex flex-col h-full bg-card items-center py-3 w-full">
+        {/* Retract / Expand trigger button in collapsed state */}
+        <SidebarTrigger className="w-9 h-9 mb-2 text-muted-foreground hover:text-foreground hover:bg-muted shrink-0" />
+
         {/* Top Actions in Collapsed State */}
         <div className="flex flex-col items-center space-y-2 mb-3 shrink-0">
           <TooltipProvider>
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
                 <Link 
+                  href="/dashboard/knowledge" 
+                  className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
+                    pathname === '/dashboard/knowledge'
+                      ? 'bg-muted text-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <Compass className="w-5 h-5 text-indigo-500" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                Knowledge Universe (2D/3D)
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link 
                   href="/dashboard" 
-                  className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
+                    pathname === '/dashboard'
+                      ? 'bg-muted text-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
                 >
                   <LayoutList className="w-5 h-5" />
                 </Link>
@@ -336,7 +365,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               <TooltipTrigger asChild>
                 <Link 
                   href="/dashboard/roadmap" 
-                  className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
+                    pathname === '/dashboard/roadmap'
+                      ? 'bg-muted text-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
                 >
                   <Layers className="w-5 h-5" />
                 </Link>
@@ -351,24 +384,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
                 <Link 
-                  href="/dashboard/knowledge" 
-                  className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                >
-                  <Compass className="w-5 h-5 text-indigo-500" />
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="text-xs">
-                Knowledge Universe (2D/3D)
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <TooltipProvider>
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Link 
                   href="/dashboard/k8s-draw" 
-                  className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
+                    pathname === '/dashboard/k8s-draw'
+                      ? 'bg-muted text-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
                 >
                   <PenTool className="w-5 h-5" />
                 </Link>
@@ -510,11 +531,27 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     <div className="w-full border-r border-border bg-card flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="p-3.5 border-b border-border space-y-2.5">
-        {/* Navigation Switchers: Overview, Roadmap, Knowledge, K8s Architecture */}
+        {/* Navigation Switchers: Knowledge Universe, Overview, Roadmap, K8s Architecture */}
         <div className="grid grid-cols-4 gap-1 p-0.5 bg-muted/50 rounded-lg border border-border">
           <Link
+            href="/dashboard/knowledge"
+            className={`flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold transition-all ${
+              pathname === '/dashboard/knowledge'
+                ? 'bg-card text-foreground font-bold shadow-xs'
+                : 'text-foreground/80 hover:bg-card hover:text-foreground'
+            }`}
+            title="2D/3D Knowledge Universe"
+          >
+            <Compass className="w-3 h-3 shrink-0 text-indigo-500" />
+            <span>Universe</span>
+          </Link>
+          <Link
             href="/dashboard"
-            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            className={`flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold transition-all ${
+              pathname === '/dashboard'
+                ? 'bg-card text-foreground font-bold shadow-xs'
+                : 'text-foreground/80 hover:bg-card hover:text-foreground'
+            }`}
             title="Overview"
           >
             <LayoutList className="w-3 h-3 shrink-0" />
@@ -522,23 +559,23 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           </Link>
           <Link
             href="/dashboard/roadmap"
-            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            className={`flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold transition-all ${
+              pathname === '/dashboard/roadmap'
+                ? 'bg-card text-foreground font-bold shadow-xs'
+                : 'text-foreground/80 hover:bg-card hover:text-foreground'
+            }`}
             title="Strategic Roadmap"
           >
             <Layers className="w-3 h-3 shrink-0" />
             <span>Roadmap</span>
           </Link>
           <Link
-            href="/dashboard/knowledge"
-            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
-            title="2D/3D Knowledge Universe"
-          >
-            <Compass className="w-3 h-3 shrink-0 text-indigo-500" />
-            <span>Universe</span>
-          </Link>
-          <Link
             href="/dashboard/k8s-draw"
-            className="flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold hover:bg-card text-foreground/80 hover:text-foreground transition-all"
+            className={`flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[11px] font-semibold transition-all ${
+              pathname === '/dashboard/k8s-draw'
+                ? 'bg-card text-foreground font-bold shadow-xs'
+                : 'text-foreground/80 hover:bg-card hover:text-foreground'
+            }`}
             title="K8s Architecture (3D)"
           >
             <PenTool className="w-3 h-3 shrink-0" />
@@ -547,9 +584,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         </div>
 
         <div className="flex items-center justify-between pt-1">
-          <h2 className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-            Project Hierarchy
-          </h2>
+          <div className="flex items-center gap-1.5">
+            <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted shrink-0" title="Collapse Sidebar" />
+            <h2 className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider">
+              Project Hierarchy
+            </h2>
+          </div>
           <div className="flex items-center gap-1">
             <Popover>
               <PopoverTrigger asChild>
