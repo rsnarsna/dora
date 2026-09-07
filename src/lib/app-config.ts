@@ -18,6 +18,20 @@ export interface RoadmapGroup {
   taskKeys: string[];
 }
 
+export interface TaskCalendarSchedule {
+  taskKey: string;
+  startDate: string;       // YYYY-MM-DD
+  startTime: string;       // HH:mm (e.g. "10:00")
+  endDate: string;         // YYYY-MM-DD
+  endTime: string;         // HH:mm (e.g. "11:30")
+  durationMinutes: number; // e.g. 90
+  title: string;
+  description?: string;
+  googleCalendarUrl?: string;
+  syncedAt: string;        // ISO timestamp
+  status: 'scheduled' | 'tentative' | 'completed';
+}
+
 export interface AppConfig {
   app: {
     title: string;
@@ -31,6 +45,7 @@ export interface AppConfig {
   jiraDomains: JiraDomainConfig[];
   roadmapGroups: RoadmapGroup[];
   roadmapGroupsByAccount?: Record<string, RoadmapGroup[]>;
+  calendarSchedulesByAccount?: Record<string, Record<string, TaskCalendarSchedule>>;
   statusColors: Record<string, string>;
   statusThemes: Record<string, { bg: string; fg: string; border: string }>;
 }
