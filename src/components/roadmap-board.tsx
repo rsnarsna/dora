@@ -2,12 +2,22 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { RawJiraIssue, PersonalDataMap, UserAccount } from '@/types';
-import { RoadmapGroup, AppConfig, TaskCalendarSchedule } from '@/lib/app-config';
+import { 
+  RoadmapGroup, 
+  AppConfig, 
+  TaskCalendarSchedule, 
+  PlannedStepMetadata 
+} from '@/lib/app-config';
 import { useDashboard } from '@/components/dashboard-layout-client';
 import { saveAppConfigAction } from '@/server/actions/config-actions';
-import { saveTaskCalendarScheduleAction, removeTaskCalendarScheduleAction } from '@/server/actions/calendar-actions';
+import { 
+  saveTaskCalendarScheduleAction, 
+  removeTaskCalendarScheduleAction 
+} from '@/server/actions/calendar-actions';
+import { savePersonalRecordAction } from '@/server/actions/personal-actions';
 import { calculateBufferDays } from '@/lib/jira-utils';
 import { GoogleCalendarSchedulerDialog } from '@/components/roadmap/google-calendar-scheduler-dialog';
+import { PlannedStepDetailDialog } from '@/components/roadmap/planned-step-detail-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Plus, 
@@ -33,7 +43,12 @@ import {
   CalendarCheck2,
   ChevronRight,
   Flame,
-  AlertCircle
+  AlertCircle,
+  Zap,
+  AlertTriangle,
+  ListTodo,
+  Sparkles,
+  Target
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -65,20 +80,32 @@ const GROUP_COLORS = [
   '#00b8d9', // Cyan
 ];
 
-export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData }) => {
+export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData: initialPersonalData }) => {
   const { appConfig, setAppConfig, activeAccount, accounts, switchAccount } = useDashboard();
   const currentAccIdRef = React.useRef<string | null>(null);
 
   const accountId = activeAccount?.id || 'account-1';
   const userCalendarEmail = activeAccount?.email || 'narayanansubramani14@gmail.com';
 
+  // Local personal data state to allow immediate inline updates
+  const [personalData, setPersonalData] = useState<PersonalDataMap>(initialPersonalData);
+  useEffect(() => {
+    setPersonalData(initialPersonalData);
+  }, [initialPersonalData]);
+
   // View switcher: 'swimlane' | 'agenda'
   const [viewMode, setViewMode] = useState<'swimlane' | 'agenda'>('swimlane');
 
-  // Scheduler modal state
+  // Google Calendar scheduler dialog state
   const [schedulingTask, setSchedulingTask] = useState<RawJiraIssue | null>(null);
   const [isSchedulerOpen, setIsSchedulerOpen] = useState(false);
   const [copiedIcs, setCopiedIcs] = useState(false);
+
+  // Deep Planned Step inspector dialog state
+  const [inspectingStepTask, setInspectingStepTask] = useState<RawJiraIssue | null>(null);
+  const [inspectingStepIndex, setInspectingStepIndex] = useState<number>(0);
+  const [inspectingGroup, setInspectingGroup] = useState<RoadmapGroup | null>(null);
+  const [isStepDetailOpen, setIsStepDetailOpen] = useState(false);
 
   // Helper to get initial groups for the active account
   const getAccountInitialGroups = (accId: string): RoadmapGroup[] => {
@@ -109,9 +136,9 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
     setGroups(getAccountInitialGroups(accId));
   }, [activeAccount?.id]);
 
+  // Static sidebar filter state — simplified & streamlined
   const [searchQuery, setSearchQuery] = useState('');
-  const [scopeFilter, setScopeFilter] = useState<'all' | 'sprint' | 'backlog'>('all');
-  const [assigneeScope, setAssigneeScope] = useState<'all' | 'me'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'sprint' | 'me'>('all');
   const [sortBy, setSortBy] = useState<'timeline' | 'priority'>('timeline');
   const [newGroupName, setNewGroupName] = useState('');
   const [isAddingGroup, setIsAddingGroup] = useState(false);
@@ -123,6 +150,11 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
   const calendarSchedules = useMemo<Record<string, TaskCalendarSchedule>>(() => {
     return appConfig?.calendarSchedulesByAccount?.[accountId] || {};
   }, [appConfig?.calendarSchedulesByAccount, accountId]);
+
+  // Planned step metadata lookup for active account
+  const plannedStepsMeta = useMemo<Record<string, PlannedStepMetadata>>(() => {
+    return appConfig?.plannedStepsByAccount?.[accountId] || {};
+  }, [appConfig?.plannedStepsByAccount, accountId]);
 
   // Set of all task keys currently placed in any group
   const groupedKeysSet = useMemo(() => {
@@ -152,16 +184,13 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
     });
   }, [calendarSchedules, taskMap]);
 
-  // Auto-aligned Queue (Available Pool) - filtered strictly to active account and optional 'me' scope
+  // Streamlined Backlog Queue (Static Sidebar source pool)
   const queueTasks = useMemo(() => {
     return tasks
       .filter((t) => {
         if (groupedKeysSet.has(t.key)) return false;
-        if (scopeFilter === 'sprint' && !t.in_active_sprint) return false;
-        if (scopeFilter === 'backlog' && t.in_active_sprint) return false;
-
-        // Filter to 'My Tasks' only if toggled and account has a jiraUser configured
-        if (assigneeScope === 'me' && activeAccount?.jiraUser && activeAccount.jiraUser !== 'none') {
+        if (filterMode === 'sprint' && !t.in_active_sprint) return false;
+        if (filterMode === 'me' && activeAccount?.jiraUser && activeAccount.jiraUser !== 'none') {
           if (t.assignee !== activeAccount.jiraUser) return false;
         }
 
@@ -183,14 +212,13 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
           const pB = PRIORITY_RANK[b.priority] || 99;
           if (pA !== pB) return pA - pB;
         }
-        // Timeline sorting: earliest official deadline or start date
         const dateA = a.official_deadline && a.official_deadline !== 'Not Set' ? a.official_deadline : a.start_date || '9999-99-99';
         const dateB = b.official_deadline && b.official_deadline !== 'Not Set' ? b.official_deadline : b.start_date || '9999-99-99';
         return dateA.localeCompare(dateB);
       });
-  }, [tasks, groupedKeysSet, scopeFilter, assigneeScope, activeAccount, searchQuery, sortBy, personalData]);
+  }, [tasks, groupedKeysSet, filterMode, activeAccount, searchQuery, sortBy, personalData]);
 
-  // Save to Supabase specifically under the active account
+  // Persist roadmap groups to Supabase
   const persistGroups = async (updatedGroups: RoadmapGroup[]) => {
     setGroups(updatedGroups);
     setSaveStatus('Saving to Database...');
@@ -226,6 +254,90 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
     } catch (error: any) {
       console.error('Failed to save roadmap groups:', error);
       setSaveStatus('⚠️ ' + (error?.message || 'Error saving to DB'));
+    }
+  };
+
+  // Persist planned step metadata (status overrides, checklists, tactical notes)
+  const handleSavePlannedMetadata = async (taskKey: string, meta: PlannedStepMetadata) => {
+    try {
+      const updatedAccountMeta = {
+        ...(appConfig?.plannedStepsByAccount?.[accountId] || {}),
+        [taskKey]: meta,
+      };
+      const updatedConfig: AppConfig = {
+        ...(appConfig || {}),
+        app: appConfig?.app || { title: 'Dora', description: 'Personal Jira Management Dashboard' },
+        sidebar: appConfig?.sidebar || { width: '22rem', defaultOpen: true },
+        accounts: appConfig?.accounts || [],
+        jiraDomains: appConfig?.jiraDomains || [],
+        statusColors: appConfig?.statusColors || {},
+        statusThemes: appConfig?.statusThemes || {},
+        roadmapGroups: groups,
+        plannedStepsByAccount: {
+          ...(appConfig?.plannedStepsByAccount || {}),
+          [accountId]: updatedAccountMeta,
+        },
+      };
+
+      if (setAppConfig) {
+        setAppConfig(updatedConfig);
+      }
+
+      await saveAppConfigAction(updatedConfig);
+    } catch (err) {
+      console.error('Failed to save planned step metadata:', err);
+    }
+  };
+
+  // Persist nickname changes
+  const handleSaveNickname = async (taskKey: string, nickname: string) => {
+    try {
+      await savePersonalRecordAction({ task_id: taskKey, nickname });
+      setPersonalData((prev) => ({
+        ...prev,
+        [taskKey]: {
+          ...(prev[taskKey] || {}),
+          nickname,
+        },
+      }));
+    } catch (err) {
+      console.error('Failed to save nickname:', err);
+    }
+  };
+
+  // Step sequence shifter
+  const handleMoveStep = (group: RoadmapGroup, taskKey: string, direction: 'up' | 'down') => {
+    const currentIndex = group.taskKeys.indexOf(taskKey);
+    if (currentIndex === -1) return;
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= group.taskKeys.length) return;
+
+    const newKeys = [...group.taskKeys];
+    newKeys.splice(currentIndex, 1);
+    newKeys.splice(targetIndex, 0, taskKey);
+
+    const updated = groups.map((g) => (g.id === group.id ? { ...g, taskKeys: newKeys } : g));
+    persistGroups(updated);
+    setInspectingStepIndex(targetIndex);
+  };
+
+  // Move task to another group
+  const handleMoveToGroup = (sourceGroupId: string, targetGroupId: string, taskKey: string) => {
+    if (sourceGroupId === targetGroupId) return;
+    const updated = groups.map((g) => {
+      if (g.id === sourceGroupId) {
+        return { ...g, taskKeys: g.taskKeys.filter((k) => k !== taskKey) };
+      }
+      if (g.id === targetGroupId) {
+        return { ...g, taskKeys: [...g.taskKeys, taskKey] };
+      }
+      return g;
+    });
+    persistGroups(updated);
+    const newGroup = updated.find((g) => g.id === targetGroupId) || null;
+    setInspectingGroup(newGroup);
+    if (newGroup) {
+      setInspectingStepIndex(newGroup.taskKeys.length - 1);
     }
   };
 
@@ -404,6 +516,75 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
     }
   };
 
+  // Helper to compute live dynamic step visual state
+  const getStepVisualState = (
+    task: RawJiraIssue,
+    group: RoadmapGroup,
+    index: number
+  ) => {
+    const meta = plannedStepsMeta[task.key];
+    const override = meta?.statusOverride;
+
+    let computedState: 'active' | 'in_progress' | 'planned' | 'blocked' | 'done' = 'planned';
+
+    if (override && override !== 'auto') {
+      computedState = override;
+    } else {
+      if (task.status === 'Done') {
+        computedState = 'done';
+      } else {
+        const firstPendingIndex = group.taskKeys.findIndex((k) => {
+          const t = taskMap.get(k);
+          return t && t.status !== 'Done';
+        });
+        if (index === firstPendingIndex) {
+          computedState = 'active';
+        } else {
+          computedState = 'planned';
+        }
+      }
+    }
+
+    switch (computedState) {
+      case 'active':
+        return {
+          label: `Step ${index + 1}: Active Focus`,
+          icon: PlayCircle,
+          className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 font-bold animate-pulse',
+          iconClassName: 'text-blue-600 dark:text-blue-400 animate-pulse',
+        };
+      case 'in_progress':
+        return {
+          label: `Step ${index + 1}: In Flight`,
+          icon: Zap,
+          className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold',
+          iconClassName: 'text-amber-600 dark:text-amber-400',
+        };
+      case 'blocked':
+        return {
+          label: `Step ${index + 1}: Blocked`,
+          icon: AlertTriangle,
+          className: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 font-bold animate-pulse',
+          iconClassName: 'text-red-600 dark:text-red-400',
+        };
+      case 'done':
+        return {
+          label: `Step ${index + 1}: Done`,
+          icon: CheckCircle2,
+          className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold',
+          iconClassName: 'text-emerald-600 dark:text-emerald-400',
+        };
+      case 'planned':
+      default:
+        return {
+          label: `Step ${index + 1}: Planned Next`,
+          icon: CircleDashed,
+          className: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 font-semibold',
+          iconClassName: 'text-indigo-600 dark:text-indigo-400 animate-[spin_8s_linear_infinite]',
+        };
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-muted/20">
       {/* Top Header Banner */}
@@ -518,39 +699,38 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
       {/* VIEW 1: SWIMLANES VIEW */}
       {viewMode === 'swimlane' && (
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          {/* LEFT PANEL: Auto-Aligned Story Queue (Source Pool) */}
+          {/* STATIC & SIMPLE LEFT SIDEBAR: Available Backlog Queue */}
           <div 
-            className="w-80 md:w-96 border-r border-border bg-card flex flex-col shrink-0 overflow-hidden"
+            className="w-80 border-r border-border bg-card flex flex-col shrink-0 overflow-hidden select-none"
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDropInQueue}
           >
-            {/* Queue Header & Filters */}
-            <div className="p-3.5 border-b border-border space-y-2.5 bg-muted/20">
+            {/* Sidebar Static Header & Minimalist Filters */}
+            <div className="p-3.5 border-b border-border space-y-2 bg-muted/20 shrink-0">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-foreground">Auto-Aligned Queue</span>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-foreground">Available Backlog</span>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono font-bold">
                     {queueTasks.length}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <span>Sort:</span>
-                  <button
-                    onClick={() => setSortBy(sortBy === 'timeline' ? 'priority' : 'timeline')}
-                    className="font-semibold text-primary hover:underline cursor-pointer"
-                  >
-                    {sortBy === 'timeline' ? 'Timeline' : 'Priority'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setSortBy(sortBy === 'timeline' ? 'priority' : 'timeline')}
+                  className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                  title="Toggle sorting by deadline or priority"
+                >
+                  Sort: {sortBy === 'timeline' ? 'Timeline' : 'Priority'}
+                </button>
               </div>
 
-              {/* Search Box */}
+              {/* Simple Search Input */}
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filter queue tasks..."
+                  placeholder="Filter backlog tasks..."
                   className="pl-8 h-7 text-xs bg-card"
                 />
                 {searchQuery && (
@@ -560,47 +740,48 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                 )}
               </div>
 
-              {/* Scope Filter Tabs */}
-              <Tabs value={scopeFilter} onValueChange={(v: any) => setScopeFilter(v)} className="w-full">
-                <TabsList className="grid w-full grid-cols-3 h-6">
-                  <TabsTrigger value="all" className="text-[11px] py-0">All</TabsTrigger>
-                  <TabsTrigger value="sprint" className="text-[11px] py-0">Sprint</TabsTrigger>
-                  <TabsTrigger value="backlog" className="text-[11px] py-0">Backlog</TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-              {/* Assignee Scope Filter */}
-              {activeAccount?.jiraUser && activeAccount.jiraUser !== 'none' && (
-                <div className="flex items-center justify-between text-[10px] pt-1 border-t border-border/50">
-                  <span className="text-muted-foreground">Scope:</span>
-                  <div className="flex items-center gap-1 bg-card rounded p-0.5 border border-border">
-                    <button
-                      onClick={() => setAssigneeScope('all')}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                        assigneeScope === 'all'
-                          ? 'bg-primary text-primary-foreground font-bold shadow-2xs'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      All ({tasks.length})
-                    </button>
-                    <button
-                      onClick={() => setAssigneeScope('me')}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                        assigneeScope === 'me'
-                          ? 'bg-primary text-primary-foreground font-bold shadow-2xs'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Assigned to Me
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* Minimal Filter Pills (All / Sprint / My Tasks) */}
+              <div className="flex items-center gap-1 bg-card rounded p-0.5 border border-border">
+                <button
+                  type="button"
+                  onClick={() => setFilterMode('all')}
+                  className={`flex-1 py-1 rounded text-[10px] font-medium transition-colors text-center cursor-pointer ${
+                    filterMode === 'all'
+                      ? 'bg-primary text-primary-foreground font-bold shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  All ({tasks.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterMode('sprint')}
+                  className={`flex-1 py-1 rounded text-[10px] font-medium transition-colors text-center cursor-pointer ${
+                    filterMode === 'sprint'
+                      ? 'bg-primary text-primary-foreground font-bold shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Sprint
+                </button>
+                {activeAccount?.jiraUser && activeAccount.jiraUser !== 'none' && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode('me')}
+                    className={`flex-1 py-1 rounded text-[10px] font-medium transition-colors text-center cursor-pointer ${
+                      filterMode === 'me'
+                        ? 'bg-primary text-primary-foreground font-bold shadow-2xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    My Tasks
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Draggable Queue Cards List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+            {/* Static Sidebar Draggable Cards List */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
               {tasks.length === 0 ? (
                 <div className="text-center py-12 text-xs text-muted-foreground italic px-4 space-y-2">
                   <div className="font-semibold text-foreground/80">0 tasks found for this account</div>
@@ -609,7 +790,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                 </div>
               ) : queueTasks.length === 0 ? (
                 <div className="text-center py-10 text-xs text-muted-foreground italic px-4">
-                  All matching tasks have been assigned to custom groups!
+                  All matching backlog tasks are currently assigned to custom groups!
                 </div>
               ) : (
                 queueTasks.map((t) => {
@@ -621,73 +802,61 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                       key={t.key}
                       draggable
                       onDragStart={(e) => handleDragStart(e, t.key)}
-                      className="p-3 bg-card border border-border rounded-lg shadow-2xs hover:border-primary/50 hover:shadow-xs transition-all cursor-grab active:cursor-grabbing text-xs space-y-2 group"
+                      className="p-2.5 bg-card border border-border rounded-lg shadow-2xs hover:border-primary/50 hover:shadow-xs transition-all cursor-grab active:cursor-grabbing text-xs space-y-1.5 group"
                     >
                       <div className="flex items-start justify-between gap-1.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/60 -ml-1" />
+                          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 -ml-1" />
+                          <span className="font-bold text-primary font-mono text-[11px]">{t.key}</span>
                           <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-bold">
                             {t.issue_type}
                           </Badge>
-                          <span className="font-bold text-primary">{t.key}</span>
                           {nickname && (
                             <span className="text-[9px] bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 px-1 rounded font-semibold border border-indigo-200 dark:border-indigo-800">
                               {nickname}
                             </span>
                           )}
                         </div>
-                        <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                        <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 font-mono">
                           {t.priority}
                         </Badge>
                       </div>
 
-                      <div className="text-foreground/90 font-medium leading-snug line-clamp-2">
+                      <div className="text-foreground font-medium leading-snug line-clamp-2 text-xs">
                         {t.title}
                       </div>
 
                       {/* Google Calendar Schedule Badge if present */}
                       {sched && (
-                        <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 text-[10px] text-blue-700 dark:text-blue-300">
+                        <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5 text-[10px] text-blue-700 dark:text-blue-300">
                           <span className="flex items-center gap-1 font-medium truncate">
                             <CalendarDays className="w-3 h-3 text-blue-600 shrink-0" />
                             {sched.startDate} {sched.startTime} ({sched.durationMinutes}m)
                           </span>
-                          {sched.googleCalendarUrl && (
-                            <a
-                              href={sched.googleCalendarUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-blue-600 hover:underline inline-flex items-center gap-0.5 ml-1 font-bold shrink-0"
-                              title="Open in Google Calendar"
-                            >
-                              <span>Open</span>
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
-                          )}
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/50">
-                        <span className="truncate max-w-[110px] flex items-center gap-1">
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/40">
+                        <span className="truncate max-w-[100px] flex items-center gap-1">
                           <User className="w-3 h-3" /> {t.assignee || 'Unassigned'}
                         </span>
                         
                         <div className="flex items-center gap-1.5">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSchedulingTask(t);
                               setIsSchedulerOpen(true);
                             }}
-                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 p-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors inline-flex items-center gap-1 text-[10px] font-medium"
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 p-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors inline-flex items-center gap-0.5 text-[10px] font-medium"
                             title="Schedule focus session on Google Calendar"
                           >
                             <CalendarDays className="w-3 h-3" />
-                            <span>{sched ? 'Edit Cal' : '+ Google Cal'}</span>
+                            <span>{sched ? 'Cal' : '+ Cal'}</span>
                           </button>
-                          <span className="flex items-center gap-1 font-mono">
-                            <Calendar className="w-3 h-3" /> {t.official_deadline || 'No Date'}
+                          <span className="font-mono">
+                            {t.official_deadline !== 'Not Set' ? t.official_deadline : 'No Date'}
                           </span>
                         </div>
                       </div>
@@ -765,7 +934,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                     <div className="flex-1 overflow-y-auto p-3 space-y-3">
                       {group.taskKeys.length === 0 ? (
                         <div className="border-2 border-dashed border-border/80 rounded-lg p-8 text-center text-xs text-muted-foreground">
-                          Drag tasks from the left queue and drop them here to sequence your work.
+                          Drag tasks from the left backlog and drop them here to sequence your work.
                         </div>
                       ) : (
                         group.taskKeys.map((key, index) => {
@@ -777,13 +946,12 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                           const selfTarget = pdata.self_target;
                           const bufferDays = calculateBufferDays(task.official_deadline, selfTarget || '');
                           const sched = calendarSchedules[key];
+                          const stepMeta = plannedStepsMeta[key];
+                          const checklist = stepMeta?.checklist || [];
+                          const completedCount = checklist.filter((i) => i.done).length;
 
-                          const isDone = task.status === 'Done';
-                          const firstPendingIndex = group.taskKeys.findIndex((k) => {
-                            const t = taskMap.get(k);
-                            return t && t.status !== 'Done';
-                          });
-                          const isActiveFocus = index === firstPendingIndex;
+                          const visualState = getStepVisualState(task, group, index);
+                          const StepIcon = visualState.icon;
 
                           return (
                             <div
@@ -794,25 +962,40 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                               onDrop={(e) => handleDropOnTaskCard(e, group.id, key)}
                               className="bg-card border border-border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-all space-y-2.5 cursor-grab active:cursor-grabbing relative group"
                             >
-                              {/* Sequence / Step Indicator Tag */}
+                              {/* DYNAMIC & INTERACTIVE PLANNED ICON TRIGGER */}
                               <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-1.5">
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold">
-                                  {isDone ? (
-                                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                                      <CheckCircle2 className="w-3 h-3" /> Step {index + 1}: Done
-                                    </span>
-                                  ) : isActiveFocus ? (
-                                    <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 animate-pulse">
-                                      <PlayCircle className="w-3 h-3" /> Step {index + 1}: Active Focus
-                                    </span>
-                                  ) : (
-                                    <span className="flex items-center gap-1 text-muted-foreground">
-                                      <CircleDashed className="w-3 h-3" /> Step {index + 1}: Planned Next
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInspectingStepTask(task);
+                                    setInspectingStepIndex(index);
+                                    setInspectingGroup(group);
+                                    setIsStepDetailOpen(true);
+                                  }}
+                                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10px] transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-2xs ${visualState.className}`}
+                                  title="Click to open Deep Strategic Step Controller & Checklist"
+                                >
+                                  <StepIcon className={`w-3 h-3 ${visualState.iconClassName}`} />
+                                  <span>{visualState.label}</span>
+                                  
+                                  {/* Micro-checklist progress badge */}
+                                  {checklist.length > 0 && (
+                                    <span className="ml-1 px-1 rounded-full bg-foreground/10 text-[9px] font-mono font-bold">
+                                      ✓ {completedCount}/{checklist.length}
                                     </span>
                                   )}
-                                </div>
+
+                                  {/* Google Cal scheduled indicator */}
+                                  {sched && (
+                                    <span className="ml-0.5 text-blue-500 font-bold" title="Scheduled on Google Calendar">
+                                      📅
+                                    </span>
+                                  )}
+                                </button>
 
                                 <button
+                                  type="button"
                                   onClick={() => handleRemoveTaskFromGroup(group.id, key)}
                                   className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-0.5 rounded transition-opacity"
                                   title="Remove from this group"
@@ -845,6 +1028,13 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                                 </p>
                               </div>
 
+                              {/* Tactical Step Notes snippet if present */}
+                              {stepMeta?.notes && (
+                                <p className="text-[11px] text-muted-foreground/90 italic bg-muted/30 px-2 py-1 rounded border border-border/50 line-clamp-1">
+                                  &quot;{stepMeta.notes}&quot;
+                                </p>
+                              )}
+
                               {/* Google Calendar Schedule Badge if present */}
                               {sched && (
                                 <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded px-2 py-1 text-[10px] text-blue-700 dark:text-blue-300">
@@ -871,6 +1061,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
                               {/* Deadlines, Buffer & Schedule Action Footer */}
                               <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[10px] text-muted-foreground">
                                 <button
+                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setSchedulingTask(task);
@@ -1166,6 +1357,37 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData 
           </div>
         </div>
       )}
+
+      {/* Deep Strategic Step Controller Dialog */}
+      <PlannedStepDetailDialog
+        isOpen={isStepDetailOpen}
+        onOpenChange={setIsStepDetailOpen}
+        task={inspectingStepTask}
+        stepIndex={inspectingStepIndex}
+        totalSteps={inspectingGroup?.taskKeys.length || 1}
+        group={inspectingGroup}
+        allGroups={groups}
+        personal={inspectingStepTask ? personalData[inspectingStepTask.key] : undefined}
+        schedule={inspectingStepTask ? calendarSchedules[inspectingStepTask.key] : undefined}
+        metadata={inspectingStepTask ? plannedStepsMeta[inspectingStepTask.key] : undefined}
+        onSaveMetadata={handleSavePlannedMetadata}
+        onMoveStep={(direction) => {
+          if (inspectingGroup && inspectingStepTask) {
+            handleMoveStep(inspectingGroup, inspectingStepTask.key, direction);
+          }
+        }}
+        onMoveToGroup={(targetGroupId) => {
+          if (inspectingGroup && inspectingStepTask) {
+            handleMoveToGroup(inspectingGroup.id, targetGroupId, inspectingStepTask.key);
+          }
+        }}
+        onOpenCalendarScheduler={(task) => {
+          setIsStepDetailOpen(false);
+          setSchedulingTask(task);
+          setIsSchedulerOpen(true);
+        }}
+        onSaveNickname={handleSaveNickname}
+      />
 
       {/* Google Calendar Scheduler Dialog */}
       <GoogleCalendarSchedulerDialog

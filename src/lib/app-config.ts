@@ -32,6 +32,19 @@ export interface TaskCalendarSchedule {
   status: 'scheduled' | 'tentative' | 'completed';
 }
 
+export interface PlannedStepChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+export interface PlannedStepMetadata {
+  statusOverride?: 'auto' | 'active' | 'planned' | 'in_progress' | 'blocked' | 'done';
+  checklist?: PlannedStepChecklistItem[];
+  notes?: string;
+  customColor?: string;
+}
+
 export interface AppConfig {
   app: {
     title: string;
@@ -46,6 +59,7 @@ export interface AppConfig {
   roadmapGroups: RoadmapGroup[];
   roadmapGroupsByAccount?: Record<string, RoadmapGroup[]>;
   calendarSchedulesByAccount?: Record<string, Record<string, TaskCalendarSchedule>>;
+  plannedStepsByAccount?: Record<string, Record<string, PlannedStepMetadata>>;
   statusColors: Record<string, string>;
   statusThemes: Record<string, { bg: string; fg: string; border: string }>;
 }
