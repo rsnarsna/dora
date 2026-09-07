@@ -226,9 +226,9 @@ export const PlannedStepDetailDialog: React.FC<PlannedStepDetailDialogProps> = (
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
+      <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
         {/* Top Header Banner */}
-        <DialogHeader className="p-5 pb-4 border-b border-border bg-card shrink-0">
+        <DialogHeader className="p-4 sm:p-5 pb-3 sm:pb-4 border-b border-border bg-card shrink-0">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono font-bold text-sm text-primary">
@@ -268,7 +268,7 @@ export const PlannedStepDetailDialog: React.FC<PlannedStepDetailDialogProps> = (
         </DialogHeader>
 
         {/* Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-4 sm:space-y-6">
           {/* SECTION 1: Interactive Step Status Override */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
@@ -281,7 +281,7 @@ export const PlannedStepDetailDialog: React.FC<PlannedStepDetailDialogProps> = (
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               {STATUS_OPTIONS.map((opt) => {
                 const Icon = opt.icon;
                 const isSelected = statusOverride === opt.id;

@@ -188,7 +188,7 @@ export const GoogleCalendarSchedulerDialog: React.FC<GoogleCalendarSchedulerDial
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] sm:max-w-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-4">
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 border-b border-border pb-2.5">
             <div className="flex items-center gap-2">

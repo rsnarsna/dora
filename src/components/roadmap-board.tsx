@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { RawJiraIssue, PersonalDataMap, UserAccount } from '@/types';
 import { 
   RoadmapGroup, 
@@ -16,9 +16,11 @@ import {
 } from '@/server/actions/calendar-actions';
 import { savePersonalRecordAction } from '@/server/actions/personal-actions';
 import { calculateBufferDays } from '@/lib/jira-utils';
+import { cn } from '@/lib/utils';
 import { GoogleCalendarSchedulerDialog } from '@/components/roadmap/google-calendar-scheduler-dialog';
 import { PlannedStepDetailDialog } from '@/components/roadmap/planned-step-detail-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   Plus, 
   Trash2, 
@@ -48,7 +50,10 @@ import {
   AlertTriangle,
   ListTodo,
   Sparkles,
-  Target
+  Target,
+  ListFilter,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -82,7 +87,7 @@ const GROUP_COLORS = [
 
 export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData: initialPersonalData }) => {
   const { appConfig, setAppConfig, activeAccount, accounts, switchAccount } = useDashboard();
-  const currentAccIdRef = React.useRef<string | null>(null);
+  const currentAccIdRef = useRef<string | null>(null);
 
   const accountId = activeAccount?.id || 'account-1';
   const userCalendarEmail = activeAccount?.email || 'narayanansubramani14@gmail.com';
@@ -95,6 +100,9 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
 
   // View switcher: 'swimlane' | 'agenda'
   const [viewMode, setViewMode] = useState<'swimlane' | 'agenda'>('swimlane');
+
+  // Mobile Section Switcher: 'swimlanes' | 'backlog' (only active on < md screens)
+  const [mobileSection, setMobileSection] = useState<'swimlanes' | 'backlog'>('swimlanes');
 
   // Google Calendar scheduler dialog state
   const [schedulingTask, setSchedulingTask] = useState<RawJiraIssue | null>(null);
@@ -121,7 +129,6 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
   };
 
   const initialAccId = activeAccount?.id || 'account-1';
-  // Local state for roadmap groups — dynamically scoped to activeAccount
   const [groups, setGroups] = useState<RoadmapGroup[]>(() => getAccountInitialGroups(initialAccId));
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState<string>('');
@@ -130,7 +137,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
   useEffect(() => {
     const accId = activeAccount?.id || 'account-1';
     if (currentAccIdRef.current === accId) {
-      return; // Already viewing this account, preserve user edits and drag actions
+      return;
     }
     currentAccIdRef.current = accId;
     setGroups(getAccountInitialGroups(accId));
@@ -184,7 +191,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
     });
   }, [calendarSchedules, taskMap]);
 
-  // Streamlined Backlog Queue (Static Sidebar source pool)
+  // Streamlined Backlog Queue
   const queueTasks = useMemo(() => {
     return tasks
       .filter((t) => {
@@ -255,6 +262,17 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
       console.error('Failed to save roadmap groups:', error);
       setSaveStatus('⚠️ ' + (error?.message || 'Error saving to DB'));
     }
+  };
+
+  // Touch-Friendly mobile 1-tap addition to group
+  const handleAddTaskToGroup = (targetGroupId: string, taskKey: string) => {
+    const updated = groups.map((g) => {
+      if (g.id === targetGroupId && !g.taskKeys.includes(taskKey)) {
+        return { ...g, taskKeys: [...g.taskKeys, taskKey] };
+      }
+      return g;
+    });
+    persistGroups(updated);
   };
 
   // Persist planned step metadata (status overrides, checklists, tactical notes)
@@ -585,30 +603,38 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
     }
   };
 
+  const scrollToSwimlane = (groupId: string) => {
+    if (typeof document !== 'undefined') {
+      const el = document.getElementById(`swimlane-${groupId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-muted/20">
-      {/* Top Header Banner */}
-      <div className="bg-card border-b border-border px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shrink-0 shadow-sm">
+      {/* Top Header Banner — Fully Responsive */}
+      <div className="bg-card border-b border-border px-3 py-2.5 sm:px-6 sm:py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-4 shrink-0 shadow-sm">
         <div>
-          <div className="flex items-center gap-2.5">
-            <Layers className="w-5 h-5 text-primary" />
-            <h1 className="text-lg font-bold text-foreground">Strategic Roadmap & Google Calendar</h1>
-            <Badge variant="outline" className="text-[10px] font-mono border-primary/40 text-primary">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+            <h1 className="text-base sm:text-lg font-bold text-foreground">Strategic Roadmap & Google Calendar</h1>
+            <Badge variant="outline" className="text-[9px] sm:text-[10px] font-mono border-primary/40 text-primary hidden xs:inline-flex">
               Personal Exoskeleton
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 hidden sm:block">
             Sequence work, schedule focus blocks on your personal Google Calendar, and monitor strategic buffers.
           </p>
         </div>
 
-        <div className="flex items-center flex-wrap gap-2.5">
+        <div className="flex items-center flex-wrap gap-2">
           {/* Active Account Switcher */}
           {accounts && accounts.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-muted/60 p-1 px-2 rounded-lg border border-border shadow-2xs">
-              <span className="text-[11px] text-muted-foreground font-semibold hidden sm:inline">Account:</span>
+            <div className="flex items-center gap-1 bg-muted/60 p-0.5 px-1.5 rounded-lg border border-border shadow-2xs">
               <Select value={activeAccount?.id || accounts[0]?.id} onValueChange={(val) => switchAccount && switchAccount(val)}>
-                <SelectTrigger className="h-7 text-xs font-bold bg-card border-border gap-2 min-w-[170px] max-w-[220px]">
+                <SelectTrigger className="h-7 text-xs font-bold bg-card border-border gap-1.5 min-w-[130px] max-w-[190px]">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                   <SelectValue placeholder="Select account" />
                 </SelectTrigger>
@@ -632,7 +658,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
               variant={viewMode === 'swimlane' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('swimlane')}
-              className="h-7 text-xs font-semibold px-2.5 gap-1.5 shadow-none"
+              className="h-7 text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 gap-1 shadow-none"
             >
               <Layers className="w-3.5 h-3.5" />
               <span>Swimlanes</span>
@@ -641,10 +667,11 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
               variant={viewMode === 'agenda' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('agenda')}
-              className="h-7 text-xs font-semibold px-2.5 gap-1.5 shadow-none relative"
+              className="h-7 text-[11px] sm:text-xs font-semibold px-2 sm:px-2.5 gap-1 shadow-none relative"
             >
               <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
-              <span>Google Cal Agenda</span>
+              <span className="hidden xs:inline">Google Cal</span>
+              <span>Agenda</span>
               {Object.keys(calendarSchedules).length > 0 && (
                 <span className="ml-0.5 px-1.5 py-0 text-[9px] font-bold rounded-full bg-blue-500 text-white leading-none">
                   {Object.keys(calendarSchedules).length}
@@ -658,37 +685,38 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
             variant="outline"
             size="sm"
             onClick={handleCopyIcsFeed}
-            className="h-7 text-xs font-semibold gap-1.5 border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
+            className="h-7 text-[11px] sm:text-xs font-semibold gap-1 border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-2"
             title="Copy RFC 5545 iCal subscription feed URL. Paste this into Google Calendar: Add calendar -> From URL"
           >
             {copiedIcs ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3 text-blue-500" />}
-            <span>{copiedIcs ? 'iCal URL Copied!' : 'Copy Sync Feed'}</span>
+            <span className="hidden sm:inline">{copiedIcs ? 'iCal Copied!' : 'Copy Sync Feed'}</span>
+            <span className="sm:hidden">iCal</span>
           </Button>
-
-          <span className="text-xs text-muted-foreground hidden xl:inline">{saveStatus}</span>
 
           {viewMode === 'swimlane' && (
             <>
               {isAddingGroup ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <Input
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
-                    placeholder="Group name (e.g. Week 3 Focus)"
-                    className="h-7 text-xs w-48"
+                    placeholder="Group name..."
+                    className="h-7 text-xs w-36 sm:w-44"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && handleCreateGroup()}
                   />
-                  <Button size="sm" onClick={handleCreateGroup} className="h-7 text-xs font-semibold">
+                  <Button size="sm" onClick={handleCreateGroup} className="h-7 text-xs font-semibold px-2">
                     Add
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setIsAddingGroup(false)} className="h-7 text-xs">
-                    Cancel
+                  <Button size="sm" variant="ghost" onClick={() => setIsAddingGroup(false)} className="h-7 text-xs px-2">
+                    ✕
                   </Button>
                 </div>
               ) : (
-                <Button size="sm" onClick={() => setIsAddingGroup(true)} className="h-7 text-xs font-semibold gap-1.5 shadow-sm">
-                  <Plus className="w-3.5 h-3.5" /> New Group
+                <Button size="sm" onClick={() => setIsAddingGroup(true)} className="h-7 text-[11px] sm:text-xs font-semibold gap-1 shadow-sm px-2 sm:px-2.5">
+                  <Plus className="w-3.5 h-3.5" /> 
+                  <span className="hidden sm:inline">New Group</span>
+                  <span className="sm:hidden">Group</span>
                 </Button>
               )}
             </>
@@ -696,17 +724,50 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
         </div>
       </div>
 
+      {/* MOBILE TACTILE SECTION SWITCHER (< md screens only) */}
+      {viewMode === 'swimlane' && (
+        <div className="md:hidden flex items-center bg-card border-b border-border p-1.5 gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => setMobileSection('swimlanes')}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-md flex items-center justify-center gap-1.5 transition-colors ${
+              mobileSection === 'swimlanes'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground bg-muted/40'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Swimlanes ({groups.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileSection('backlog')}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-md flex items-center justify-center gap-1.5 transition-colors ${
+              mobileSection === 'backlog'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground bg-muted/40'
+            }`}
+          >
+            <ListFilter className="w-3.5 h-3.5" />
+            <span>Backlog ({queueTasks.length})</span>
+          </button>
+        </div>
+      )}
+
       {/* VIEW 1: SWIMLANES VIEW */}
       {viewMode === 'swimlane' && (
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          {/* STATIC & SIMPLE LEFT SIDEBAR: Available Backlog Queue */}
+          {/* STATIC & SIMPLE BACKLOG SIDEBAR (Desktop: side-by-side; Mobile: full width when toggled) */}
           <div 
-            className="w-80 border-r border-border bg-card flex flex-col shrink-0 overflow-hidden select-none"
+            className={cn(
+              "border-r border-border bg-card flex flex-col shrink-0 overflow-hidden select-none",
+              mobileSection === 'backlog' ? 'w-full flex-1' : 'hidden md:flex md:w-80'
+            )}
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDropInQueue}
           >
             {/* Sidebar Static Header & Minimalist Filters */}
-            <div className="p-3.5 border-b border-border space-y-2 bg-muted/20 shrink-0">
+            <div className="p-3 border-b border-border space-y-2 bg-muted/20 shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-foreground">Available Backlog</span>
@@ -806,7 +867,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                     >
                       <div className="flex items-start justify-between gap-1.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 -ml-1" />
+                          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 -ml-1 hidden md:inline" />
                           <span className="font-bold text-primary font-mono text-[11px]">{t.key}</span>
                           <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-bold">
                             {t.issue_type}
@@ -837,9 +898,41 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                       )}
 
                       <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/40">
-                        <span className="truncate max-w-[100px] flex items-center gap-1">
-                          <User className="w-3 h-3" /> {t.assignee || 'Unassigned'}
-                        </span>
+                        {/* Touch-Friendly 1-Tap "Add to Swimlane" Popover for mobile */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="text-primary hover:text-primary/80 px-1.5 py-0.5 rounded bg-primary/5 hover:bg-primary/10 border border-primary/20 transition-colors inline-flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+                              title="Add this task to a Swimlane"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Swimlane</span>
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-60 p-2 z-50 text-xs" align="start">
+                            <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                              Move to Swimlane
+                            </div>
+                            <div className="space-y-1 mt-1">
+                              {groups.map((g) => (
+                                <button
+                                  key={g.id}
+                                  type="button"
+                                  onClick={() => {
+                                    handleAddTaskToGroup(g.id, t.key);
+                                    setMobileSection('swimlanes');
+                                  }}
+                                  className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-muted text-xs flex items-center gap-2 transition-colors cursor-pointer"
+                                >
+                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: g.color || '#0052cc' }} />
+                                  <span className="truncate font-medium flex-1">{g.name}</span>
+                                  <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                                </button>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                         
                         <div className="flex items-center gap-1.5">
                           <button
@@ -868,24 +961,50 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
           </div>
 
           {/* RIGHT CANVAS: Custom Workstream Groups (Horizontal Scrollable Swimlanes) */}
-          <div className="flex-1 overflow-x-auto p-6">
-            <div className="flex items-start gap-5 min-w-max h-full">
+          <div 
+            className={cn(
+              "flex-1 overflow-x-auto p-3 sm:p-6",
+              mobileSection === 'swimlanes' ? 'flex flex-col' : 'hidden md:flex md:flex-col'
+            )}
+          >
+            {/* Mobile Swimlane Quick Jump Pills */}
+            <div className="md:hidden flex items-center gap-1.5 overflow-x-auto pb-2 mb-2 shrink-0 border-b border-border/50">
+              <span className="text-[10px] font-bold text-muted-foreground shrink-0 uppercase tracking-wider">
+                Jump to:
+              </span>
+              {groups.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => scrollToSwimlane(g.id)}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 flex items-center gap-1 bg-card hover:bg-muted transition-colors cursor-pointer"
+                  style={{ borderColor: `${g.color || '#0052cc'}60` }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: g.color || '#0052cc' }} />
+                  <span className="truncate max-w-[120px]">{g.name}</span>
+                  <span className="text-[9px] opacity-70">({g.taskKeys.length})</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-start gap-3 sm:gap-5 min-w-max h-full snap-x snap-mandatory">
               {groups.map((group) => {
                 const isOver = dragOverGroupId === group.id;
 
                 return (
                   <div
                     key={group.id}
+                    id={`swimlane-${group.id}`}
                     onDragOver={(e) => handleDragOver(e, group.id)}
                     onDragLeave={(e) => handleDragLeave(e, group.id)}
                     onDrop={(e) => handleDropInGroup(e, group.id)}
-                    className={`w-80 md:w-96 flex flex-col rounded-xl border bg-card/60 backdrop-blur-xs shadow-sm transition-colors duration-200 max-h-full ${
+                    className={`w-[86vw] sm:w-80 md:w-96 snap-center sm:snap-start shrink-0 flex flex-col rounded-xl border bg-card/60 backdrop-blur-xs shadow-sm transition-colors duration-200 max-h-full ${
                       isOver ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-border'
                     }`}
                   >
                     {/* Group Header */}
                     <div 
-                      className="p-3.5 border-b border-border flex items-center justify-between gap-2 rounded-t-xl"
+                      className="p-3 sm:p-3.5 border-b border-border flex items-center justify-between gap-2 rounded-t-xl"
                       style={{ borderTop: `4px solid ${group.color || '#0052cc'}` }}
                     >
                       <div className="min-w-0 flex-1">
@@ -921,6 +1040,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
 
                       <div className="flex items-center gap-1">
                         <button
+                          type="button"
                           onClick={() => handleDeleteGroup(group.id)}
                           className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
                           title="Delete Group"
@@ -931,10 +1051,10 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                     </div>
 
                     {/* Group Task Sequence Cards */}
-                    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                    <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-2.5">
                       {group.taskKeys.length === 0 ? (
-                        <div className="border-2 border-dashed border-border/80 rounded-lg p-8 text-center text-xs text-muted-foreground">
-                          Drag tasks from the left backlog and drop them here to sequence your work.
+                        <div className="border-2 border-dashed border-border/80 rounded-lg p-6 sm:p-8 text-center text-xs text-muted-foreground">
+                          No tasks in this swimlane yet. Add tasks from the backlog.
                         </div>
                       ) : (
                         group.taskKeys.map((key, index) => {
@@ -960,10 +1080,10 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                               onDragStart={(e) => handleDragStart(e, key)}
                               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                               onDrop={(e) => handleDropOnTaskCard(e, group.id, key)}
-                              className="bg-card border border-border rounded-lg p-3 shadow-2xs hover:shadow-xs transition-all space-y-2.5 cursor-grab active:cursor-grabbing relative group"
+                              className="bg-card border border-border rounded-lg p-2.5 sm:p-3 shadow-2xs hover:shadow-xs transition-all space-y-2 cursor-grab active:cursor-grabbing relative group"
                             >
                               {/* DYNAMIC & INTERACTIVE PLANNED ICON TRIGGER */}
-                              <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-1.5">
+                              <div className="flex items-center justify-between gap-1.5 border-b border-border/60 pb-1.5">
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -973,11 +1093,11 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                                     setInspectingGroup(group);
                                     setIsStepDetailOpen(true);
                                   }}
-                                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10px] transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-2xs ${visualState.className}`}
+                                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-2xs min-h-[28px] ${visualState.className}`}
                                   title="Click to open Deep Strategic Step Controller & Checklist"
                                 >
-                                  <StepIcon className={`w-3 h-3 ${visualState.iconClassName}`} />
-                                  <span>{visualState.label}</span>
+                                  <StepIcon className={`w-3.5 h-3.5 ${visualState.iconClassName}`} />
+                                  <span className="font-bold">{visualState.label}</span>
                                   
                                   {/* Micro-checklist progress badge */}
                                   {checklist.length > 0 && (
@@ -994,14 +1114,35 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                                   )}
                                 </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveTaskFromGroup(group.id, key)}
-                                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-0.5 rounded transition-opacity"
-                                  title="Remove from this group"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  {/* Touch-Friendly Sequence Shift Buttons for Mobile */}
+                                  <button
+                                    type="button"
+                                    disabled={index === 0}
+                                    onClick={() => handleMoveStep(group, key, 'up')}
+                                    className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 rounded hover:bg-muted transition-colors md:hidden"
+                                    title="Move Step Up"
+                                  >
+                                    <ArrowUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={index >= group.taskKeys.length - 1}
+                                    onClick={() => handleMoveStep(group, key, 'down')}
+                                    className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 rounded hover:bg-muted transition-colors md:hidden"
+                                    title="Move Step Down"
+                                  >
+                                    <ArrowDown className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveTaskFromGroup(group.id, key)}
+                                    className="opacity-70 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1 rounded transition-opacity"
+                                    title="Remove from this group"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
                               </div>
 
                               {/* Task Key & Title */}
@@ -1059,7 +1200,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                               )}
 
                               {/* Deadlines, Buffer & Schedule Action Footer */}
-                              <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[10px] text-muted-foreground">
+                              <div className="pt-1.5 border-t border-border/50 flex items-center justify-between text-[10px] text-muted-foreground">
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1103,52 +1244,52 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
         </div>
       )}
 
-      {/* VIEW 2: GOOGLE CALENDAR AGENDA VIEW */}
+      {/* VIEW 2: GOOGLE CALENDAR AGENDA VIEW — Responsive */}
       {viewMode === 'agenda' && (
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+          <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6">
             {/* Agenda Header Context */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl bg-card border border-border shadow-xs">
-              <div className="space-y-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-xl bg-card border border-border shadow-xs">
+              <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <CalendarDays className="w-5 h-5 text-blue-500" />
-                  <h2 className="text-base font-bold text-foreground">Google Calendar Focus Agenda</h2>
+                  <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
+                  <h2 className="text-sm sm:text-base font-bold text-foreground">Google Calendar Focus Agenda</h2>
                   <Badge variant="outline" className="text-[10px] font-mono border-blue-500/30 text-blue-600 dark:text-blue-400">
-                    {scheduledTasksList.length} Focus Blocks Scheduled
+                    {scheduledTasksList.length} Scheduled
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground">
                   Scheduled time-blocks synced for <span className="font-semibold text-foreground">{userCalendarEmail}</span>.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleCopyIcsFeed}
-                  className="h-8 text-xs font-semibold gap-1.5"
+                  className="h-7 sm:h-8 text-xs font-semibold gap-1.5"
                 >
                   {copiedIcs ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedIcs ? 'Subscribed Feed URL Copied' : 'Copy iCal Sync URL'}</span>
+                  <span>{copiedIcs ? 'Copied' : 'Sync iCal'}</span>
                 </Button>
                 <a
                   href="https://calendar.google.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 h-7 sm:h-8 px-2.5 sm:px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Open Google Calendar</span>
+                  <span>Google Cal</span>
                 </a>
               </div>
             </div>
 
             {/* Scheduled Tasks List or Empty State */}
             {scheduledTasksList.length === 0 ? (
-              <div className="rounded-xl border-2 border-dashed border-border p-12 text-center space-y-4 bg-card/40">
-                <div className="w-12 h-12 rounded-full bg-blue-500/10 text-blue-600 flex items-center justify-center mx-auto">
-                  <CalendarDays className="w-6 h-6" />
+              <div className="rounded-xl border-2 border-dashed border-border p-8 sm:p-12 text-center space-y-3 sm:space-y-4 bg-card/40">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-500/10 text-blue-600 flex items-center justify-center mx-auto">
+                  <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-foreground">No Google Calendar Focus Blocks Yet</h3>
@@ -1165,8 +1306,8 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                 </Button>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="grid grid-cols-1 gap-2.5 sm:gap-3">
                   {scheduledTasksList.map(({ schedule, task }) => {
                     const selfTarget = task ? personalData[task.key]?.self_target : undefined;
                     const nickname = task ? personalData[task.key]?.nickname : undefined;
@@ -1174,14 +1315,14 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
 
                     return (
                       <Card key={schedule.taskKey} className="overflow-hidden hover:shadow-md transition-shadow">
-                        <div className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
                           {/* Time & Date Block */}
-                          <div className="flex items-center gap-3.5 min-w-[200px]">
-                            <div className="w-12 h-12 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 flex flex-col items-center justify-center shrink-0">
-                              <span className="text-[10px] uppercase font-bold tracking-wider">
+                          <div className="flex items-center gap-3 min-w-[180px]">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 flex flex-col items-center justify-center shrink-0">
+                              <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider">
                                 {new Date(schedule.startDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short' })}
                               </span>
-                              <span className="text-base font-extrabold leading-none">
+                              <span className="text-sm sm:text-base font-extrabold leading-none">
                                 {new Date(schedule.startDate + 'T00:00:00').getDate()}
                               </span>
                             </div>
@@ -1201,7 +1342,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
 
                           {/* Task Info */}
                           <div className="flex-1 min-w-0 space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                               <Link
                                 href={`/dashboard/${schedule.taskKey}`}
                                 className="font-bold text-xs text-primary hover:underline inline-flex items-center gap-1"
@@ -1226,7 +1367,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                               )}
                             </div>
 
-                            <p className="text-xs font-medium text-foreground line-clamp-1">
+                            <p className="text-xs font-medium text-foreground line-clamp-2">
                               {task?.title || schedule.title}
                             </p>
 
@@ -1238,7 +1379,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                           </div>
 
                           {/* Deadlines, Buffer & Actions */}
-                          <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                          <div className="flex items-center gap-2 shrink-0 self-end md:self-center flex-wrap">
                             {task && selfTarget && (
                               <Badge 
                                 variant="outline" 
@@ -1297,16 +1438,15 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
 
             {/* Quick Unscheduled High Priority Tasks with Deadlines */}
             {tasks.filter((t) => !calendarSchedules[t.key] && t.status !== 'Done').length > 0 && (
-              <div className="space-y-3 pt-4 border-t border-border">
+              <div className="space-y-2.5 pt-4 border-t border-border">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-500" />
-                    <h3 className="text-xs font-bold text-foreground">Unscheduled Active Tasks (Recommended for Focus Blocks)</h3>
+                    <h3 className="text-xs font-bold text-foreground">Unscheduled Tasks (Recommended for Focus)</h3>
                   </div>
-                  <span className="text-[11px] text-muted-foreground">Click &quot;+ Schedule&quot; to plan on Google Calendar</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-2.5">
                   {tasks
                     .filter((t) => !calendarSchedules[t.key] && t.status !== 'Done')
                     .slice(0, 6)
@@ -1317,7 +1457,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
                       return (
                         <div
                           key={t.key}
-                          className="p-3 bg-card border border-border rounded-lg shadow-2xs space-y-2 flex flex-col justify-between hover:border-primary/40 transition-colors"
+                          className="p-2.5 sm:p-3 bg-card border border-border rounded-lg shadow-2xs space-y-1.5 flex flex-col justify-between hover:border-primary/40 transition-colors"
                         >
                           <div className="space-y-1">
                             <div className="flex items-center justify-between gap-1">
