@@ -45,7 +45,7 @@ export async function getDb(): Promise<Db | null> {
     const client = await getClient();
     if (!client) return null;
 
-    const db = client.db(MONGODB_DB_NAME);
+    const db = client.db(env.mongodbDbName);
 
     if (!globalForMongo.mongoIndexesReady) {
       await ensureIndexes(db);
@@ -56,6 +56,42 @@ export async function getDb(): Promise<Db | null> {
   } catch (error) {
     console.error('[MongoDB] Connection failed:', error instanceof Error ? error.message : error);
     return null;
+  }
+}
+
+export async function pingDatabase(): Promise<{
+  configured: boolean;
+  connected: boolean;
+  database: string;
+  error?: string;
+}> {
+  const database = env.mongodbDbName;
+  if (!isDatabaseConfigured()) {
+    return {
+      configured: false,
+      connected: false,
+      database,
+      error: 'MONGODB_URI is not set in server environment secrets.',
+    };
+  }
+
+  try {
+    const client = await getClient();
+    if (!client) {
+      return { configured: false, connected: false, database };
+    }
+    await client.db(database).command({ ping: 1 });
+    return { configured: true, connected: true, database };
+  } catch (error) {
+    const rawMsg = error instanceof Error ? error.message : 'Unable to reach MongoDB cluster';
+    // Strip any accidental URI credentials from driver error strings
+    const safeMsg = rawMsg.replace(/mongodb(\+srv)?:\/\/[^@\s]+@/gi, 'mongodb$1://***:***@');
+    return {
+      configured: true,
+      connected: false,
+      database,
+      error: safeMsg,
+    };
   }
 }
 
