@@ -1,7 +1,7 @@
 import { UserAccount } from '@/types';
 
 /**
- * Centralized App Configuration — loaded from Supabase `app_config` table.
+ * Centralized App Configuration — loaded from MongoDB (`DoraMangement.app_config`).
  * All UI customizations live here instead of being hardcoded in components.
  */
 export interface JiraDomainConfig {
@@ -65,7 +65,7 @@ export interface AppConfig {
 }
 
 /**
- * Fallback config used when no row exists in Supabase yet.
+ * Fallback config used when no document exists in MongoDB yet.
  */
 export const DEFAULT_CONFIG: AppConfig = {
   app: {

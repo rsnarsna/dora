@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronsUpDown, Check, Settings, UserCheck, RefreshCw, Layers, PenTool, Compass } from 'lucide-react';
+import { ChevronsUpDown, Check, Settings, UserCheck, RefreshCw, Layers, PenTool, Compass, X } from 'lucide-react';
 import { RawJiraIssue, PersonalDataMap, UserAccount } from '@/types';
 import { getJiraTasksAction } from '@/server/actions/jira-actions';
 import { getPersonalRecordsAction } from '@/server/actions/personal-actions';
@@ -52,6 +52,7 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
   const [activeAccountId, setActiveAccountId] = useState<string>('account-1');
   const [isAccountConfigOpen, setIsAccountConfigOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   const activeAccount = useMemo(() => {
     return accounts.find((a) => a.id === activeAccountId) || accounts[0] || DEFAULT_CONFIG.accounts[0];
@@ -66,19 +67,32 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
 
   const handleJiraSync = async () => {
     setIsSyncing(true);
+    setNotice(null);
     try {
       const res = await syncJiraDataAction();
       if (res.ok && res.totalFetched > 0) {
-        alert(`✅ Jira sync complete!\n\nSuccessfully fetched and updated ${res.totalFetched} tasks from Atlassian into Supabase.`);
+        setNotice({
+          type: 'success',
+          message: `Jira sync complete: updated ${res.totalFetched} tasks in MongoDB (DoraMangement).`,
+        });
         await loadData();
       } else if (!res.ok) {
-        alert(`${res.error}\n\nOpening Configuration settings for you now...`);
+        setNotice({
+          type: 'error',
+          message: res.error || 'Jira sync failed. Please check your configuration.',
+        });
         setIsAccountConfigOpen(true);
       } else {
-        alert('⚠️ Jira sync returned 0 issues. Check your Jira JQL permissions.');
+        setNotice({
+          type: 'info',
+          message: 'Jira sync returned 0 issues. Check your Jira JQL permissions.',
+        });
       }
-    } catch (e: any) {
-      alert('Error syncing Jira tasks: ' + (e.message || e));
+    } catch (e: unknown) {
+      setNotice({
+        type: 'error',
+        message: 'Error syncing Jira tasks: ' + (e instanceof Error ? e.message : String(e)),
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -86,16 +100,21 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
 
   const handleSaveAccounts = async (updatedAccounts: UserAccount[]) => {
     setAccounts(updatedAccounts);
-    // Persist to backend config
     const updatedConfig = { ...appConfig, accounts: updatedAccounts };
     setAppConfig(updatedConfig);
-    await saveAppConfigAction(updatedConfig);
+    const res = await saveAppConfigAction(updatedConfig);
+    if (!res.ok && res.error) {
+      setNotice({ type: 'error', message: res.error });
+    }
   };
 
   const handleSaveJiraDomains = async (domains: JiraDomainConfig[]) => {
     const updatedConfig = { ...appConfig, jiraDomains: domains };
     setAppConfig(updatedConfig);
-    await saveAppConfigAction(updatedConfig);
+    const res = await saveAppConfigAction(updatedConfig);
+    if (!res.ok && res.error) {
+      setNotice({ type: 'error', message: res.error });
+    }
   };
 
   // Filters
@@ -426,6 +445,27 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
               </Button>
             </div>
           </header>
+          {notice && (
+            <div
+              className={`px-4 py-2 text-xs flex items-center justify-between gap-3 border-b shrink-0 ${
+                notice.type === 'error'
+                  ? 'bg-destructive/10 text-destructive border-destructive/20'
+                  : notice.type === 'success'
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                    : 'bg-muted text-foreground border-border'
+              }`}
+            >
+              <span className="whitespace-pre-line font-medium">{notice.message}</span>
+              <button
+                type="button"
+                onClick={() => setNotice(null)}
+                className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10 shrink-0"
+                aria-label="Dismiss notification"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           <div className="flex-1 overflow-auto">
             {children}
           </div>

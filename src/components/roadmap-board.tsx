@@ -225,7 +225,7 @@ export const RoadmapBoard: React.FC<RoadmapBoardProps> = ({ tasks, personalData:
       });
   }, [tasks, groupedKeysSet, filterMode, activeAccount, searchQuery, sortBy, personalData]);
 
-  // Persist roadmap groups to Supabase
+  // Persist roadmap groups to MongoDB
   const persistGroups = async (updatedGroups: RoadmapGroup[]) => {
     setGroups(updatedGroups);
     setSaveStatus('Saving to Database...');

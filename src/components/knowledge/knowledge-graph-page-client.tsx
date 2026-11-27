@@ -107,19 +107,23 @@ export const KnowledgeGraphPageClient: React.FC<KnowledgeGraphPageClientProps> =
     setSelectedNodeId(newNodeId);
 
     showStatus('Saving new concept...');
-    await saveKnowledgeNodeAction(newNode);
+    const nodeRes = await saveKnowledgeNodeAction(newNode);
+    if (!nodeRes.ok) {
+      showStatus(nodeRes.error || 'Failed to save concept');
+      return;
+    }
     if (activeClusterId) {
       const clusterToSave = updatedClusters.find((c) => c.id === activeClusterId);
       if (clusterToSave) await saveKnowledgeClusterAction(clusterToSave);
     }
-    showStatus('✅ Concept created');
+    showStatus('Concept saved');
   };
 
   const handleUpdateNode = async (updated: KnowledgeNode) => {
     setNodes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
     showStatus('Updating concept...');
-    await saveKnowledgeNodeAction(updated);
-    showStatus('✅ Saved');
+    const res = await saveKnowledgeNodeAction(updated);
+    showStatus(res.ok ? 'Saved' : res.error || 'Failed to save');
   };
 
   const handleDeleteNode = async (nodeId: string) => {
@@ -293,13 +297,13 @@ export const KnowledgeGraphPageClient: React.FC<KnowledgeGraphPageClientProps> =
 
   const handleResetPlayground = async () => {
     if (!activeAccount?.id) return;
-    showStatus('Resetting playground concepts...');
+    showStatus('Clearing knowledge canvas...');
     const data = await resetKnowledgeGraphAction(activeAccount.id);
     setNodes(data.nodes);
     setRelations(data.relations);
     setClusters(data.clusters);
     setSelectedNodeId(null);
-    showStatus('✅ Playground reset to initial multi-cluster architecture');
+    showStatus('Knowledge canvas cleared');
   };
 
   return (

@@ -1,18 +1,29 @@
 'use server';
 
-import { db } from '@/lib/db';
-import { jiraTasks } from '@/lib/db/schema';
+import { z } from 'zod';
+import { getCollections, isDatabaseConfigured, MONGODB_DB_NAME } from '@/lib/db';
 import { RawJiraIssue } from '@/types';
-import { eq } from 'drizzle-orm';
+
+const createTaskSchema = z.object({
+  title: z.string().trim().min(1, 'Task title is required').max(300),
+  issueType: z.string().trim().min(1).max(60),
+  priority: z.string().trim().min(1).max(40),
+  domain: z.string().trim().max(120).optional(),
+});
 
 /**
- * Fetch all Jira Tasks from Supabase
+ * Fetch all Jira Tasks from MongoDB (`DoraMangement.jira_tasks`).
  */
 export async function getJiraTasksAction(): Promise<RawJiraIssue[]> {
   try {
-    if (!db) return [];
-    
-    const tasks = await db.select().from(jiraTasks);
+    const cols = await getCollections();
+    if (!cols) return [];
+
+    const tasks = await cols.jiraTasks
+      .find({}, { projection: { _id: 0 } })
+      .sort({ updatedAt: -1 })
+      .toArray();
+
     return tasks.map((t) => ({
       id: t.key,
       key: t.key,
@@ -25,41 +36,67 @@ export async function getJiraTasksAction(): Promise<RawJiraIssue[]> {
       priority: t.priority,
       start_date: t.startDate || '',
       official_deadline: t.officialDeadline || '',
-      in_active_sprint: t.inActiveSprint || false,
+      in_active_sprint: Boolean(t.inActiveSprint),
       domain: t.domain || '',
     }));
   } catch (error) {
-    console.error('Failed to get Jira tasks:', error);
+    console.error('[MongoDB] Failed to get Jira tasks:', error);
     return [];
   }
 }
 
 /**
- * Create a new custom task manually in Supabase.
+ * Create a new custom task manually in MongoDB (`DoraMangement.jira_tasks`).
  */
-export async function createTaskAction(data: { title: string; issueType: string; priority: string; domain?: string }) {
-  if (!db) throw new Error('Database connection not established');
-  
-  // Generate a key (e.g. MANUAL-XYZ)
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  const key = `MANUAL-${rand}`;
+export async function createTaskAction(data: {
+  title: string;
+  issueType: string;
+  priority: string;
+  domain?: string;
+}) {
+  const parsed = createTaskSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message || 'Invalid task input');
+  }
 
-  await db.insert(jiraTasks).values({
+  const cols = await getCollections();
+  if (!cols) {
+    throw new Error(
+      isDatabaseConfigured()
+        ? `Unable to connect to MongoDB database "${MONGODB_DB_NAME}".`
+        : 'MONGODB_URI is not configured in server environment secrets.'
+    );
+  }
+
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  const key = `MANUAL-${rand}-${Date.now().toString(36).slice(-3).toUpperCase()}`;
+  const today = new Date().toISOString().slice(0, 10);
+
+  await cols.jiraTasks.insertOne({
     key,
-    title: data.title,
-    issueType: data.issueType,
-    priority: data.priority,
+    parentKey: null,
+    title: parsed.data.title,
+    issueType: parsed.data.issueType,
+    priority: parsed.data.priority,
     status: 'To Do',
-    domain: data.domain || 'softmania-ps',
+    assignee: 'Unassigned',
+    reporter: 'Manual',
+    startDate: today,
+    officialDeadline: 'Not Set',
+    inActiveSprint: false,
+    domain: parsed.data.domain || 'softmania-ps',
+    updatedAt: new Date(),
   });
 
   return { ok: true, key };
 }
 
 /**
- * Seed Jira Tasks into Supabase from the local JSON file.
- * (Deprecated: Data has been migrated to Supabase)
+ * Legacy seed action — collections start empty by design until created or synced.
  */
 export async function seedJiraTasksAction() {
-  return { success: false, error: 'Data already migrated. JSON file has been removed.' };
+  return {
+    success: false,
+    error: `Collections in ${MONGODB_DB_NAME} start empty. Create tasks manually or run Sync Jira.`,
+  };
 }

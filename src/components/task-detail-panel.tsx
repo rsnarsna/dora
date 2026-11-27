@@ -38,6 +38,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   const [newUpdate, setNewUpdate] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (task) {
@@ -64,6 +65,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   const handleSavePersonal = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
+    setSaveError(null);
 
     try {
       const { savePersonalRecordAction } = await import('@/server/actions/personal-actions');
@@ -83,11 +85,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
         onRefreshData();
         setTimeout(() => setSaveSuccess(false), 3000);
       } else {
-        alert(res.error || 'Failed to save changes');
+        setSaveError(res.error || 'Failed to save changes');
       }
     } catch (e) {
       console.error('Error saving personal record:', e);
-      alert('Error connecting to server');
+      setSaveError('Error connecting to server');
     } finally {
       setIsSaving(false);
     }
@@ -282,6 +284,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
               🎯 Self-Discipline & Tracking Settings
             </h3>
             <div className="flex items-center gap-2">
+              {saveError && (
+                <span className="text-xs text-destructive font-semibold">
+                  {saveError}
+                </span>
+              )}
               {saveSuccess && (
                 <span className="text-xs text-green-600 font-bold flex items-center gap-1">
                   <CheckCircle className="w-3.5 h-3.5" /> Saved
